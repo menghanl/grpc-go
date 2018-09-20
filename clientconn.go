@@ -80,6 +80,9 @@ var (
 	// being set for ClientConn. Users should either set one or explicitly
 	// call WithInsecure DialOption to disable security.
 	errNoTransportSecurity = errors.New("grpc: no transport security set (use grpc.WithInsecure() explicitly or set credentials)")
+	// errTransportCredsAndBundle indicates that creds bundle is used together
+	// with other individual Transport Credentials.
+	errTransportCredsAndBundle = errors.New("grpc: credentials.Bundle shouldn't be used together with individual TransportCredentials")
 	// errTransportCredentialsMissing indicates that users want to transmit security
 	// information (e.g., oauth2 token) which requires secure connection on an insecure
 	// connection.
@@ -137,17 +140,33 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if channelz.IsOn() {
 		if cc.dopts.channelzParentID != 0 {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     "Channel Created",
+				Severity: channelz.CtINFO,
+				Parent: &channelz.TraceEventDesc{
+					Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
+					Severity: channelz.CtINFO,
+				},
+			})
 		} else {
 			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     "Channel Created",
+				Severity: channelz.CtINFO,
+			})
 		}
+		cc.csMgr.channelzID = cc.channelzID
 	}
 
 	if !cc.dopts.insecure {
-		if cc.dopts.copts.TransportCredentials == nil {
+		if cc.dopts.copts.TransportCredentials == nil && cc.dopts.copts.CredsBundle == nil {
 			return nil, errNoTransportSecurity
 		}
+		if cc.dopts.copts.TransportCredentials != nil && cc.dopts.copts.CredsBundle != nil {
+			return nil, errTransportCredsAndBundle
+		}
 	} else {
-		if cc.dopts.copts.TransportCredentials != nil {
+		if cc.dopts.copts.TransportCredentials != nil || cc.dopts.copts.CredsBundle != nil {
 			return nil, errCredentialsConflict
 		}
 		for _, cd := range cc.dopts.copts.PerRPCCredentials {
@@ -260,6 +279,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 	cc.balancerBuildOpts = balancer.BuildOptions{
 		DialCreds:        credsClone,
+		CredsBundle:      cc.dopts.copts.CredsBundle,
 		Dialer:           cc.dopts.copts.Dialer,
 		ChannelzParentID: cc.channelzID,
 	}
@@ -308,6 +328,7 @@ type connectivityStateManager struct {
 	mu         sync.Mutex
 	state      connectivity.State
 	notifyChan chan struct{}
+	channelzID int64
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -323,6 +344,12 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
+	if channelz.IsOn() {
+		channelz.AddTraceEvent(csm.channelzID, &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Channel Connectivity change to %v", state),
+			Severity: channelz.CtINFO,
+		})
+	}
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
 		close(csm.notifyChan)
@@ -500,10 +527,26 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 
 	builder := balancer.Get(name)
+	// TODO(yuxuanli): If user send a service config that does not contain a valid balancer name, should
+	// we reuse previous one?
+	if channelz.IsOn() {
+		if builder == nil {
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Channel switches to new LB policy %q due to fallback from invalid balancer name", PickFirstBalancerName),
+				Severity: channelz.CtWarning,
+			})
+		} else {
+			channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Channel switches to new LB policy %q", name),
+				Severity: channelz.CtINFO,
+			})
+		}
+	}
 	if builder == nil {
 		grpclog.Infof("failed to get balancer builder for: %v, using pick_first instead", name)
 		builder = newPickfirstBuilder()
 	}
+
 	cc.preBalancerName = cc.curBalancerName
 	cc.curBalancerName = builder.Name()
 	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
@@ -524,10 +567,11 @@ func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivi
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
 //
 // Caller needs to make sure len(addrs) > 0.
-func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
+func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (*addrConn, error) {
 	ac := &addrConn{
 		cc:           cc,
 		addrs:        addrs,
+		scopts:       opts,
 		dopts:        cc.dopts,
 		czData:       new(channelzData),
 		resetBackoff: make(chan struct{}),
@@ -541,6 +585,14 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address) (*addrConn, error) {
 	}
 	if channelz.IsOn() {
 		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
+		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+			Desc:     "Subchannel Created",
+			Severity: channelz.CtINFO,
+			Parent: &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
+				Severity: channelz.CtINFO,
+			},
+		})
 	}
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
@@ -605,7 +657,7 @@ func (ac *addrConn) connect() error {
 		ac.mu.Unlock()
 		return nil
 	}
-	ac.state = connectivity.Connecting
+	ac.updateConnectivityState(connectivity.Connecting)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.mu.Unlock()
 
@@ -689,6 +741,17 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 func (cc *ClientConn) handleServiceConfig(js string) error {
 	if cc.dopts.disableServiceConfig {
 		return nil
+	}
+	if cc.scRaw == js {
+		return nil
+	}
+	if channelz.IsOn() {
+		channelz.AddTraceEvent(cc.channelzID, &channelz.TraceEventDesc{
+			// The special formatting of \"%s\" instead of %q is to provide nice printing of service config
+			// for human consumption.
+			Desc:     fmt.Sprintf("Channel has a new service config \"%s\"", js),
+			Severity: channelz.CtINFO,
+		})
 	}
 	sc, err := parseServiceConfig(js)
 	if err != nil {
@@ -788,6 +851,19 @@ func (cc *ClientConn) Close() error {
 		ac.tearDown(ErrClientConnClosing)
 	}
 	if channelz.IsOn() {
+		ted := &channelz.TraceEventDesc{
+			Desc:     "Channel Deleted",
+			Severity: channelz.CtINFO,
+		}
+		if cc.dopts.channelzParentID != 0 {
+			ted.Parent = &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
+				Severity: channelz.CtINFO,
+			}
+		}
+		channelz.AddTraceEvent(cc.channelzID, ted)
+		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
+		// the entity beng deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(cc.channelzID)
 	}
 	return nil
@@ -803,11 +879,13 @@ type addrConn struct {
 	dopts  dialOptions
 	events trace.EventLog
 	acbw   balancer.SubConn
+	scopts balancer.NewSubConnOptions
 
 	mu           sync.Mutex
 	curAddr      resolver.Address
 	reconnectIdx int // The index in addrs list to start reconnecting from.
-	state        connectivity.State
+	// Use updateConnectivityState for updating addrConn's connectivity state.
+	state connectivity.State
 	// ready is closed and becomes nil when a new transport is up or failed
 	// due to timeout.
 	ready     chan struct{}
@@ -828,6 +906,16 @@ type addrConn struct {
 
 	channelzID int64 // channelz unique identification number
 	czData     *channelzData
+}
+
+func (ac *addrConn) updateConnectivityState(s connectivity.State) {
+	ac.state = s
+	if channelz.IsOn() {
+		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Subchannel Connectivity change to %v", s),
+			Severity: channelz.CtINFO,
+		})
+	}
 }
 
 // adjustParams updates parameters used to create transports upon
@@ -916,13 +1004,16 @@ func (ac *addrConn) resetTransport() error {
 		}
 		ac.printf("connecting")
 		if ac.state != connectivity.Connecting {
-			ac.state = connectivity.Connecting
+			ac.updateConnectivityState(connectivity.Connecting)
 			ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		}
 		// copy ac.addrs in case of race
 		addrsIter := make([]resolver.Address, len(ac.addrs))
 		copy(addrsIter, ac.addrs)
 		copts := ac.dopts.copts
+		if ac.scopts.CredsBundle != nil {
+			copts.CredsBundle = ac.scopts.CredsBundle
+		}
 		ac.mu.Unlock()
 		connected, err := ac.createTransport(connectRetryNum, ridx, backoffDeadline, connectDeadline, addrsIter, copts, resetBackoff)
 		if err != nil {
@@ -939,6 +1030,12 @@ func (ac *addrConn) resetTransport() error {
 func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, connectDeadline time.Time, addrs []resolver.Address, copts transport.ConnectOptions, resetBackoff chan struct{}) (bool, error) {
 	for i := ridx; i < len(addrs); i++ {
 		addr := addrs[i]
+		if channelz.IsOn() {
+			channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchannel picks a new address %q to connect", addr.Addr),
+				Severity: channelz.CtINFO,
+			})
+		}
 		target := transport.TargetInfo{
 			Addr:      addr.Addr,
 			Metadata:  addr.Metadata,
@@ -999,7 +1096,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 			return false, errConnClosing
 		}
 		ac.printf("ready")
-		ac.state = connectivity.Ready
+		ac.updateConnectivityState(connectivity.Ready)
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.transport = newTr
 		ac.curAddr = addr
@@ -1025,7 +1122,7 @@ func (ac *addrConn) createTransport(connectRetryNum, ridx int, backoffDeadline, 
 		ac.mu.Unlock()
 		return false, errConnClosing
 	}
-	ac.state = connectivity.TransientFailure
+	ac.updateConnectivityState(connectivity.TransientFailure)
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	ac.cc.resolveNow(resolver.ResolveNowOption{})
 	if ac.ready != nil {
@@ -1114,7 +1211,7 @@ func (ac *addrConn) transportMonitor() {
 		}
 		// Set connectivity state to TransientFailure before calling
 		// resetTransport. Transition READY->CONNECTING is not valid.
-		ac.state = connectivity.TransientFailure
+		ac.updateConnectivityState(connectivity.TransientFailure)
 		ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 		ac.cc.resolveNow(resolver.ResolveNowOption{})
 		ac.curAddr = resolver.Address{}
@@ -1175,7 +1272,7 @@ func (ac *addrConn) tearDown(err error) {
 		// address removal and GoAway.
 		ac.transport.GracefulClose()
 	}
-	ac.state = connectivity.Shutdown
+	ac.updateConnectivityState(connectivity.Shutdown)
 	ac.tearDownErr = err
 	ac.cc.handleSubConnStateChange(ac.acbw, ac.state)
 	if ac.events != nil {
@@ -1187,6 +1284,16 @@ func (ac *addrConn) tearDown(err error) {
 		ac.ready = nil
 	}
 	if channelz.IsOn() {
+		channelz.AddTraceEvent(ac.channelzID, &channelz.TraceEventDesc{
+			Desc:     "Subchannel Deleted",
+			Severity: channelz.CtINFO,
+			Parent: &channelz.TraceEventDesc{
+				Desc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
+				Severity: channelz.CtINFO,
+			},
+		})
+		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
+		// the entity beng deleted, and thus prevent it from being deleted right away.
 		channelz.RemoveEntry(ac.channelzID)
 	}
 }
