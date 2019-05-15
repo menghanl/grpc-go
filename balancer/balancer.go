@@ -115,6 +115,11 @@ type NewSubConnOptions struct {
 	// HealthCheckEnabled indicates whether health check service should be
 	// enabled on this SubConn
 	HealthCheckEnabled bool
+	// ServerLoadHandler handles server loads received from out-of-band load
+	// reporting..
+	//
+	// out-of-band load report is started only if this is not nil.
+	ServerLoadHandler func(interface{})
 }
 
 // ClientConn represents a gRPC ClientConn.
