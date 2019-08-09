@@ -130,3 +130,7 @@ func (s) TestStreamContext(t *testing.T) {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
 	}
 }
+
+func (s) TestTriggerActions(t *testing.T) {
+	t.Fatalf("!!!!!FAIL!!!!!")
+}
