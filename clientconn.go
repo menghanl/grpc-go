@@ -631,7 +631,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 	cc.balancerWrapper = newCCBalancerWrapper(cc, builder, cc.balancerBuildOpts)
 }
 
-func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
+func (cc *ClientConn) handleSubConnStateChange(sc *acBalancerWrapper, s connectivity.State) {
 	cc.mu.Lock()
 	if cc.conns == nil {
 		cc.mu.Unlock()
@@ -938,7 +938,7 @@ type addrConn struct {
 
 	cc     *ClientConn
 	dopts  dialOptions
-	acbw   balancer.SubConn
+	acbw   *acBalancerWrapper
 	scopts balancer.NewSubConnOptions
 
 	// transport is set when there's a viable transport (note: ac state may not be READY as LB channel

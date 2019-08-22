@@ -114,7 +114,6 @@ google.golang.org/grpc/xds/internal/balancer/edsbalancer/balancergroup.go:SA1019
 google.golang.org/grpc/xds/internal/resolver/xds_resolver.go:SA1019
 google.golang.org/grpc/xds/internal/balancer/xds.go:SA1019
 google.golang.org/grpc/xds/internal/balancer/xds_client.go:SA1019
-google.golang.org/grpc/balancer_conn_wrappers.go:SA1019
 google.golang.org/grpc/balancer_test.go:SA1019
 google.golang.org/grpc/benchmark/benchmain/main.go:SA1019
 google.golang.org/grpc/benchmark/worker/benchmark_client.go:SA1019
@@ -123,6 +122,7 @@ google.golang.org/grpc/clientconn_state_transition_test.go:SA1019
 google.golang.org/grpc/clientconn_test.go:SA1019
 google.golang.org/grpc/examples/features/debugging/client/main.go:SA1019
 google.golang.org/grpc/examples/features/load_balancing/client/main.go:SA1019
+google.golang.org/grpc/internal/balancerutil/balancer_manager.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server.go:SA1019
 google.golang.org/grpc/internal/transport/handler_server_test.go:SA1019
 google.golang.org/grpc/resolver/dns/dns_resolver.go:SA1019
