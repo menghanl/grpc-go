@@ -38,7 +38,7 @@ type ccBalancerWrapper struct {
 
 func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *ccBalancerWrapper {
 	ccb := &ccBalancerWrapper{cc: cc}
-	ccb.balancerManager = balancerutil.NewCCBalancerWrapper(ccb, b, bopts)
+	ccb.balancerManager = balancerutil.NewBalancerManager(ccb, b, bopts)
 	return ccb
 }
 

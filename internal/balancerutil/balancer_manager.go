@@ -88,9 +88,7 @@ func (b *scStateUpdateBuffer) get() <-chan *scStateUpdate {
 // updates will be sent to the balancer.
 //
 // The way to do is to run all balancer methods in a goroutine. As opposite to
-// holding a big mutex, which could cause deadlock.
-//
-// Kaybe this can be done by using two mutex?
+// holding a mutex, which could cause deadlock.
 type BalancerManager struct {
 	cc               balancer.ClientConn
 	balancer         balancer.Balancer
@@ -98,12 +96,13 @@ type BalancerManager struct {
 	ccUpdateCh       chan *balancer.ClientConnState
 	done             chan struct{}
 
-	incomingMu sync.Mutex // Mutex for all incoming calls from the balancer.
-	subConns   map[balancer.SubConn]struct{}
+	incomingMu          sync.Mutex // Mutex for all incoming calls from the balancer.
+	subConns            map[balancer.SubConn]struct{}
+	subConnsToBeRemoved map[balancer.SubConn]struct{}
 }
 
-// NewCCBalancerWrapper creates a new BalancerManager.
-func NewCCBalancerWrapper(cc balancer.ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *BalancerManager {
+// NewBalancerManager creates a new BalancerManager.
+func NewBalancerManager(cc balancer.ClientConn, b balancer.Builder, bopts balancer.BuildOptions) *BalancerManager {
 	ccb := &BalancerManager{
 		cc:               cc,
 		stateChangeQueue: newSCStateUpdateBuffer(),
@@ -155,11 +154,7 @@ func (ccb *BalancerManager) watcher() {
 		select {
 		case <-ccb.done:
 			ccb.balancer.Close()
-			ccb.incomingMu.Lock()
-			scs := ccb.subConns
-			ccb.subConns = nil
-			ccb.incomingMu.Unlock()
-			for sc := range scs {
+			for sc := range ccb.subConnsToBeRemoved {
 				ccb.cc.RemoveSubConn(sc)
 			}
 			return
@@ -175,7 +170,15 @@ func (ccb *BalancerManager) watcher() {
 // updates from ClientConn, and ClientConn also won't updates from the balancer.
 func (ccb *BalancerManager) Close() {
 	close(ccb.done)
+	ccb.incomingMu.Lock()
+	// We don't remove the SubConns immediately when closing. They are kept in a
+	// set, and will be removed after balancer is closed.
+	ccb.subConnsToBeRemoved = ccb.subConns
+	ccb.subConns = nil
+	ccb.incomingMu.Unlock()
 }
+
+// Outgoing to balancers.
 
 // HandleSubConnStateChange forwards sc's state change to balancer.
 func (ccb *BalancerManager) HandleSubConnStateChange(sc balancer.SubConn, s connectivity.State) {
@@ -226,22 +229,18 @@ func (ccb *BalancerManager) RemoveSubConn(sc balancer.SubConn) {
 
 // UpdateBalancerState updates state and picker.
 func (ccb *BalancerManager) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
-
 	ccb.incomingMu.Lock()
 	defer ccb.incomingMu.Unlock()
 	if ccb.subConns == nil {
 		return
 	}
 	ccb.cc.UpdateBalancerState(s, p)
-
 }
 
 // ResolveNow forwards resolve signal to resolver.
 func (ccb *BalancerManager) ResolveNow(o resolver.ResolveNowOption) {
 	ccb.cc.ResolveNow(o)
 }
-
-// Others.
 
 // Target returns the ClientConn's target.
 func (ccb *BalancerManager) Target() string {
