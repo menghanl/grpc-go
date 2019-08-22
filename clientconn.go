@@ -583,6 +583,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State) error {
 	}
 
 	cc.balancerWrapper.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
+	cc.firstResolveEvent.Fire()
 	return nil
 }
 
