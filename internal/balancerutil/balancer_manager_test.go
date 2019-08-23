@@ -256,13 +256,13 @@ func Test_NoOutgoingUpdatesToBalancerAfterClose(t *testing.T) {
 		balancer.BuildOptions{},
 	)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		go func() {
 			m.UpdateClientConnState(&balancer.ClientConnState{})
 		}()
 	}
 	m.Close()
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		go func() {
 			m.HandleSubConnStateChange(nil, 0)
 		}()
@@ -289,7 +289,7 @@ func Test_NoIncomingUpdatesFromBalancerAfterClose(t *testing.T) {
 		balancer.BuildOptions{},
 	)
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		go func() {
 			m.UpdateBalancerState(0, nil)
 			m.RemoveSubConn(nil)
@@ -300,7 +300,7 @@ func Test_NoIncomingUpdatesFromBalancerAfterClose(t *testing.T) {
 	want := cc.totalCount
 	m.Close()
 	cc.mu.Unlock()
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 10; i++ {
 		go func() {
 			m.UpdateBalancerState(0, nil)
 			m.RemoveSubConn(nil)

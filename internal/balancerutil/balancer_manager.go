@@ -154,7 +154,11 @@ func (ccb *BalancerManager) watcher() {
 		select {
 		case <-ccb.done:
 			ccb.balancer.Close()
-			for sc := range ccb.subConnsToBeRemoved {
+			ccb.incomingMu.Lock()
+			scs := ccb.subConnsToBeRemoved
+			ccb.subConnsToBeRemoved = nil
+			ccb.incomingMu.Unlock()
+			for sc := range scs {
 				ccb.cc.RemoveSubConn(sc)
 			}
 			return
