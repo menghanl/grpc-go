@@ -460,12 +460,15 @@ type ClientConn struct {
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper
 	sc              *ServiceConfig
-	conns           map[*addrConn]struct{}
-	// Keepalive parameter can be updated if a GoAway is received.
-	mkp             keepalive.ClientParameters
 	curBalancerName string
 	balancerWrapper *ccBalancerWrapper
-	retryThrottler  atomic.Value
+
+	connsMu sync.RWMutex
+	conns   map[*addrConn]struct{}
+	// Keepalive parameter can be updated if a GoAway is received.
+	mkp keepalive.ClientParameters
+
+	retryThrottler atomic.Value
 
 	firstResolveEvent *grpcsync.Event
 
@@ -634,7 +637,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 
 func (cc *ClientConn) handleSubConnStateChange(sc *acBalancerWrapper, s connectivity.State) {
 	cc.mu.Lock()
-	if cc.conns == nil {
+	if cc.resolverWrapper == nil {
 		cc.mu.Unlock()
 		return
 	}
@@ -658,9 +661,9 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 	}
 	ac.ctx, ac.cancel = context.WithCancel(cc.ctx)
 	// Track ac in cc. This needs to be done before any getTransport(...) is called.
-	cc.mu.Lock()
+	cc.connsMu.Lock()
 	if cc.conns == nil {
-		cc.mu.Unlock()
+		cc.connsMu.Unlock()
 		return nil, ErrClientConnClosing
 	}
 	if channelz.IsOn() {
@@ -675,20 +678,20 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		})
 	}
 	cc.conns[ac] = struct{}{}
-	cc.mu.Unlock()
+	cc.connsMu.Unlock()
 	return ac, nil
 }
 
 // removeAddrConn removes the addrConn in the subConn from clientConn.
 // It also tears down the ac with the given error.
 func (cc *ClientConn) removeAddrConn(ac *addrConn, err error) {
-	cc.mu.Lock()
+	cc.connsMu.Lock()
 	if cc.conns == nil {
-		cc.mu.Unlock()
+		cc.connsMu.Unlock()
 		return
 	}
 	delete(cc.conns, ac)
-	cc.mu.Unlock()
+	cc.connsMu.Unlock()
 	ac.tearDown(err)
 }
 
@@ -875,8 +878,8 @@ func (cc *ClientConn) resolveNow(o resolver.ResolveNowOption) {
 //
 // This API is EXPERIMENTAL.
 func (cc *ClientConn) ResetConnectBackoff() {
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
+	cc.connsMu.Lock()
+	defer cc.connsMu.Unlock()
 	for ac := range cc.conns {
 		ac.resetConnectBackoff()
 	}
@@ -886,23 +889,18 @@ func (cc *ClientConn) ResetConnectBackoff() {
 func (cc *ClientConn) Close() error {
 	defer cc.cancel()
 
+	var (
+		rWrapper *ccResolverWrapper
+		bWrapper *ccBalancerWrapper
+	)
 	cc.mu.Lock()
-	if cc.conns == nil {
-		cc.mu.Unlock()
-		return ErrClientConnClosing
+	if cc.resolverWrapper != nil {
+		rWrapper = cc.resolverWrapper
+		cc.resolverWrapper = nil
+		bWrapper = cc.balancerWrapper
+		cc.balancerWrapper = nil
 	}
-	conns := cc.conns
-	cc.conns = nil
-	cc.csMgr.updateState(connectivity.Shutdown)
-
-	rWrapper := cc.resolverWrapper
-	cc.resolverWrapper = nil
-	bWrapper := cc.balancerWrapper
-	cc.balancerWrapper = nil
 	cc.mu.Unlock()
-
-	cc.blockingpicker.close()
-
 	if rWrapper != nil {
 		rWrapper.close()
 	}
@@ -910,9 +908,20 @@ func (cc *ClientConn) Close() error {
 		bWrapper.close()
 	}
 
+	cc.connsMu.Lock()
+	if cc.conns == nil {
+		cc.connsMu.Unlock()
+		return ErrClientConnClosing
+	}
+	conns := cc.conns
+	cc.conns = nil
+	cc.csMgr.updateState(connectivity.Shutdown)
+	cc.connsMu.Unlock()
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
+
+	cc.blockingpicker.close()
 	if channelz.IsOn() {
 		ted := &channelz.TraceEventDesc{
 			Desc:     "Channel Deleted",
