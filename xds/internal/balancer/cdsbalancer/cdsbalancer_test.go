@@ -54,6 +54,22 @@ func Test(t *testing.T) {
 
 type testClientConn struct {
 	balancer.ClientConn
+
+	newPickerCh chan balancer.V2Picker // The last picker updated.
+}
+
+func newTestClientConn() *testClientConn {
+	return &testClientConn{
+		newPickerCh: make(chan balancer.V2Picker, 1),
+	}
+}
+
+func (tcc *testClientConn) UpdateState(bs balancer.State) {
+	select {
+	case <-tcc.newPickerCh:
+	default:
+	}
+	tcc.newPickerCh <- bs.Picker
 }
 
 // cdsWatchInfo wraps the update and the error sent in a CDS watch callback.
@@ -215,9 +231,9 @@ func edsCCS(service string, enableLRS bool, xdsClient interface{}) balancer.Clie
 
 // setup creates a cdsBalancer and an edsBalancer (and overrides the
 // newEDSBalancer function to return it), and also returns a cleanup function.
-func setup() (*cdsBalancer, *testEDSBalancer, func()) {
+func setup() (*cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
 	builder := cdsBB{}
-	tcc := &testClientConn{}
+	tcc := newTestClientConn()
 	cdsB := builder.Build(tcc, balancer.BuildOptions{}).(balancer.V2Balancer)
 
 	edsB := newTestEDSBalancer()
@@ -226,18 +242,18 @@ func setup() (*cdsBalancer, *testEDSBalancer, func()) {
 		return edsB
 	}
 
-	return cdsB.(*cdsBalancer), edsB, func() {
+	return cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newEDSBalancer = oldEDSBalancerBuilder
 	}
 }
 
 // setupWithWatch does everything that setup does, and also pushes a ClientConn
 // update to the cdsBalancer and waits for a CDS watch call to be registered.
-func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, func()) {
+func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testClientConn, func()) {
 	t.Helper()
 
 	xdsC := fakeclient.NewClient()
-	cdsB, edsB, cancel := setup()
+	cdsB, edsB, tcc, cancel := setup()
 	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
@@ -248,7 +264,7 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 	if gotCluster != clusterName {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, clusterName)
 	}
-	return xdsC, cdsB, edsB, cancel
+	return xdsC, cdsB, edsB, tcc, cancel
 }
 
 // TestUpdateClientConnState invokes the UpdateClientConnState method on the
@@ -302,7 +318,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			cdsB, _, cancel := setup()
+			cdsB, _, _, cancel := setup()
 			defer func() {
 				cancel()
 				cdsB.Close()
@@ -329,7 +345,7 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 // TestUpdateClientConnStateAfterClose invokes the UpdateClientConnState method
 // on the cdsBalancer after close and verifies that it returns an error.
 func (s) TestUpdateClientConnStateAfterClose(t *testing.T) {
-	cdsB, _, cancel := setup()
+	cdsB, _, _, cancel := setup()
 	defer cancel()
 	cdsB.Close()
 
@@ -342,7 +358,7 @@ func (s) TestUpdateClientConnStateAfterClose(t *testing.T) {
 // update with the same cluster and xdsClient does not cause the cdsBalancer to
 // create a new watch.
 func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
-	xdsC, cdsB, _, cancel := setupWithWatch(t)
+	xdsC, cdsB, _, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -360,7 +376,7 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 // different updates and verifies that the expect ClientConnState is propagated
 // to the edsBalancer.
 func (s) TestHandleClusterUpdate(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -401,7 +417,7 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 // resolver error is received by the cdsBalancer, and also that the same error
 // is propagated to the edsBalancer.
 func (s) TestResolverError(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -439,7 +455,7 @@ func (s) TestResolverError(t *testing.T) {
 // TestUpdateSubConnState pushes a SubConn update to the cdsBalancer and
 // verifies that the update is propagated to the edsBalancer.
 func (s) TestUpdateSubConnState(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -462,7 +478,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 // TestClose calls Close() on the cdsBalancer, and verifies that the underlying
 // edsBalancer is also closed.
 func (s) TestClose(t *testing.T) {
-	xdsC, cdsB, edsB, cancel := setupWithWatch(t)
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer cancel()
 
 	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
