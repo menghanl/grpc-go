@@ -63,7 +63,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 	}
 	defer cleanup()
 
-	cw := newXDSClientWrapper(nil, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 
 	for _, test := range []struct {
@@ -142,12 +142,12 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
-	newEDS := func(update *xdsclient.EDSUpdate) error {
+	newEDS := func(update *xdsclient.EDSUpdate, err error) error {
 		edsRespChan.Send(update)
 		return nil
 	}
 
-	cw := newXDSClientWrapper(newEDS, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	cw := newXDSClientWrapper(newEDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 
 	xdsC := fakeclient.NewClient()
@@ -181,7 +181,7 @@ func (s) TestClientWrapperGetsXDSClientInAttributes(t *testing.T) {
 	}
 	defer func() { xdsclientNew = oldxdsclientNew }()
 
-	cw := newXDSClientWrapper(nil, nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
+	cw := newXDSClientWrapper(nil, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil)
 	defer cw.close()
 
 	// Verify that the eds watch is registered for the expected resource name.

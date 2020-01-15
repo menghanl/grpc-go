@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/buffer"
@@ -181,13 +182,7 @@ func (b *cdsBalancer) run() {
 			// We first handle errors, if any, and then proceed with handling
 			// the update, only if the status quo has changed.
 			if err := update.err; err != nil {
-				// TODO: Should we cancel the watch only on specific errors?
-				if b.cancelWatch != nil {
-					b.cancelWatch()
-				}
-				if b.edsLB != nil {
-					b.edsLB.ResolverError(err)
-				}
+				b.handleErrorFromUpdate(err)
 			}
 			if b.client == update.client && b.clusterToWatch == update.clusterName {
 				break
@@ -213,9 +208,7 @@ func (b *cdsBalancer) run() {
 			b.edsLB.UpdateSubConnState(update.subConn, update.state)
 		case *watchUpdate:
 			if err := update.err; err != nil {
-				if b.edsLB != nil {
-					b.edsLB.ResolverError(err)
-				}
+				b.handleErrorFromUpdate(err)
 				break
 			}
 
@@ -256,6 +249,38 @@ func (b *cdsBalancer) run() {
 			// This is the *ONLY* point of return from this function.
 			return
 		}
+	}
+}
+
+// handleErrorFromUpdate handles both the error from ClientComm (from resolver)
+// and the error from xds client (from the watcher).
+//
+// It stops the watch if error is resource-not-found (resource removed).
+//
+// If there's an eds balancer, it hand the error to it. Otherwise, it fails the
+// RPCs with errors.
+func (b *cdsBalancer) handleErrorFromUpdate(err error) {
+	// TODO: connection errors will be sent to the eds balancers directly, and
+	// also forwarded by the parent balancers/resolvers. So the eds balancer may
+	// see the same error multiple times. We way want to only forward the error
+	// to eds if it's not a connection error.
+	//
+	// This is not necessary today, because xds client never sends connection
+	// errors.
+
+	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && b.cancelWatch != nil {
+		b.cancelWatch()
+	}
+
+	if b.edsLB != nil {
+		b.edsLB.ResolverError(err)
+	} else {
+		// If eds balancer was never created, fail the RPCs with
+		// errors.
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.TransientFailure,
+			Picker:            base.NewErrPickerV2(err),
+		})
 	}
 }
 

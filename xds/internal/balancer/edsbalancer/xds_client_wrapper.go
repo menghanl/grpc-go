@@ -48,8 +48,7 @@ var (
 // creating a new xds client, and start watching EDS. The given callbacks will
 // be called with EDS updates or errors.
 type xdsclientWrapper struct {
-	newEDSUpdate func(*xdsclient.EDSUpdate) error
-	loseContact  func()
+	newEDSUpdate func(*xdsclient.EDSUpdate, error) error
 	bbo          balancer.BuildOptions
 	loadStore    lrs.Store
 
@@ -76,10 +75,9 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate) error, loseContact func(), bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(*xdsclient.EDSUpdate, error) error, bbo balancer.BuildOptions, loadStore lrs.Store) *xdsclientWrapper {
 	return &xdsclientWrapper{
 		newEDSUpdate: newEDSUpdate,
-		loseContact:  loseContact,
 		bbo:          bbo,
 		loadStore:    loadStore,
 	}
@@ -188,7 +186,7 @@ func (c *xdsclientWrapper) startEDSWatch(nameToWatch string) {
 			// error indicates "lose contact".
 			return
 		}
-		if err := c.newEDSUpdate(update); err != nil {
+		if err := c.newEDSUpdate(update, err); err != nil {
 			grpclog.Warningf("xds: processing new EDS update failed due to %v.", err)
 		}
 	})

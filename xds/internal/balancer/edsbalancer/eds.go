@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"time"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -37,8 +36,7 @@ import (
 )
 
 const (
-	defaultTimeout = 10 * time.Second
-	edsName        = "eds_experimental"
+	edsName = "eds_experimental"
 )
 
 var (
@@ -62,11 +60,11 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		cc:              cc,
 		buildOpts:       opts,
 		grpcUpdate:      make(chan interface{}),
-		xdsClientUpdate: make(chan interface{}),
+		xdsClientUpdate: make(chan *edsUpdate),
 	}
 	loadStore := lrs.NewStore()
 	x.edsImpl = newEDSBalancer(x.cc, loadStore)
-	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore)
+	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.buildOpts, loadStore)
 	go x.run()
 	return x
 }
@@ -112,7 +110,7 @@ type edsBalancer struct {
 
 	// edsBalancer continuously monitor the channels below, and will handle events from them in sync.
 	grpcUpdate      chan interface{}
-	xdsClientUpdate chan interface{}
+	xdsClientUpdate chan *edsUpdate
 
 	client  *xdsclientWrapper // may change when passed a different service config
 	config  *EDSConfig        // may change when passed a different service config
@@ -139,6 +137,15 @@ func (x *edsBalancer) run() {
 			return
 		}
 	}
+}
+
+func (x *edsBalancer) handleErrorFromUpdate(err error) {
+	// TODO: Need to distinguish between connection errors and resource removed
+	// errors. For the former, we will need to handle it later on for fallback.
+	// For the latter, handle it by stopping the watch, closing sub-balancers
+	// and pickers.
+
+	panic("www")
 }
 
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
@@ -172,23 +179,21 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 		}
 
 		x.config = cfg
+	case error:
+		// This is the resolver error.
+		x.handleErrorFromUpdate(u)
 	default:
 		// unreachable path
 		panic("wrong update type")
 	}
 }
 
-func (x *edsBalancer) handleXDSClientUpdate(update interface{}) {
-	switch u := update.(type) {
-	// TODO: this func should accept (*xdsclient.EDSUpdate, error), and process
-	// the error, instead of having a separate loseContact signal.
-	case *xdsclient.EDSUpdate:
-		x.edsImpl.HandleEDSResponse(u)
-	case *loseContact:
-		// loseContact can be useful for going into fallback.
-	default:
-		panic("unexpected xds client update type")
+func (x *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
+	if err := update.err; err != nil {
+		x.handleErrorFromUpdate(err)
+		return
 	}
+	x.edsImpl.HandleEDSResponse(update.resp)
 }
 
 type subConnStateUpdate struct {
@@ -215,11 +220,11 @@ func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	}
 }
 
-func (x *edsBalancer) ResolverError(error) {
-	// TODO: Need to distinguish between connection errors and resource removed
-	// errors. For the former, we will need to handle it later on for fallback.
-	// For the latter, handle it by stopping the watch, closing sub-balancers
-	// and pickers.
+func (x *edsBalancer) ResolverError(err error) {
+	select {
+	case x.grpcUpdate <- err:
+	case <-x.ctx.Done():
+	}
 }
 
 func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -230,26 +235,20 @@ func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	return nil
 }
 
-func (x *edsBalancer) handleEDSUpdate(resp *xdsclient.EDSUpdate) error {
+type edsUpdate struct {
+	resp *xdsclient.EDSUpdate
+	err  error
+}
+
+func (x *edsBalancer) handleEDSUpdate(resp *xdsclient.EDSUpdate, err error) error {
 	// TODO: this function should take (resp, error), and send them together on
 	// the channel. There doesn't need to be a separate `loseContact` function.
 	select {
-	case x.xdsClientUpdate <- resp:
+	case x.xdsClientUpdate <- &edsUpdate{resp: resp, err: err}:
 	case <-x.ctx.Done():
 	}
 
 	return nil
-}
-
-type loseContact struct {
-}
-
-// TODO: delete loseContact when handleEDSUpdate takes (resp, error).
-func (x *edsBalancer) loseContact() {
-	select {
-	case x.xdsClientUpdate <- &loseContact{}:
-	case <-x.ctx.Done():
-	}
 }
 
 func (x *edsBalancer) Close() {

@@ -64,7 +64,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 
 	var err error
 	if routeName == "" {
-		err = fmt.Errorf("xds: LDS target %s not found in received response %+v", wi.target, resp)
+		err = NewErrorf(ErrorTypeResourceNotFound, "xds: LDS target %s not found in received response %+v", wi.target, resp)
 	}
 	wi.stopTimer()
 	wi.callback.(ldsCallback)(ldsUpdate{routeName: routeName}, err)

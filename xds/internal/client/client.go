@@ -110,6 +110,11 @@ func (c *Client) handleLDSUpdate(u ldsUpdate, err error) {
 	grpclog.Infof("xds: client received LDS update: %+v, err: %v", u, err)
 	if err != nil {
 		c.mu.Lock()
+		// If route config name was removed in the most recent LDS response,
+		// stop the RDS watch for it.
+		if TypeOfError(err) == ErrorTypeResourceNotFound && c.rdsCancel != nil {
+			c.rdsCancel()
+		}
 		if c.serviceCallback != nil {
 			c.serviceCallback(ServiceUpdate{}, err)
 		}
