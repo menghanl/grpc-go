@@ -386,6 +386,54 @@ func (s) TestClose(t *testing.T) {
 	edsb.close()
 }
 
+// // TestEDS_EmptyUpdate covers the cases when eds impl receives an empty update.
+// //
+// // It should send an error picker with transient failure to the parent.
+// //
+// // TODO: currently the error is always balancer.TransientError. When updated to
+// // new balancer API, it should return error in type Transient Failure, but with
+// // better error details (all sub-balancer removed).
+// //
+// // TODO: if the first update is an empty update, the picker won't be updated
+// // because the update will just be ignored. This can be fixed in two ways:
+// // 1. eds explicitly updates picker to be an error picker when it receives an
+// // empty update
+// // 2. the parent of eds closes the eds balancer, and explicitly updates the
+// // picker.
+// // This needs to be fixed when the decision is made.
+// func (s) TestEDS_EmptyUpdate(t *testing.T) {
+// 	cc := newTestClientConn(t)
+// 	edsb := newEDSBalancerImpl(cc, nil)
+//
+// 	// One locality with one backend.
+// 	clab1 := xdsclient.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+// 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
+// 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab1.Build()))
+//
+// 	sc1 := <-cc.newSubConnCh
+// 	edsb.HandleSubConnStateChange(sc1, connectivity.Connecting)
+// 	edsb.HandleSubConnStateChange(sc1, connectivity.Ready)
+//
+// 	// Pick with only the first backend.
+// 	p1 := <-cc.newPickerCh
+// 	for i := 0; i < 5; i++ {
+// 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
+// 		if !reflect.DeepEqual(gotSCSt.SubConn, sc1) {
+// 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
+// 		}
+// 	}
+//
+// 	edsb.HandleEDSResponse(&xdsclient.EDSUpdate{})
+// 	// Pick should fail with transient failure.
+// 	perr1 := <-cc.newPickerCh
+// 	for i := 0; i < 5; i++ {
+// 		_, err := perr1.Pick(balancer.PickInfo{})
+// 		if !reflect.DeepEqual(err, balancer.ErrTransientFailure) {
+// 			t.Fatalf("picker.Pick, got error %v, want error %v", err, balancer.ErrTransientFailure)
+// 		}
+// 	}
+// }
+
 // Create XDS balancer, and update sub-balancer before handling eds responses.
 // Then switch between round-robin and test-const-balancer after handling first
 // eds response.
@@ -412,7 +460,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		_, err := p0.Pick(balancer.PickInfo{})
 		if err != testutils.ErrTestConstPicker {
-			t.Fatalf("picker.Pick, got err %q, want err %q", err, testutils.ErrTestConstPicker)
+			t.Fatalf("picker.Pick, got err %+v, want err %+v", err, testutils.ErrTestConstPicker)
 		}
 	}
 

@@ -53,4 +53,5 @@ func (c *Client) WatchCluster(clusterName string, cb func(ClusterUpdate, error))
 		wi.timeout()
 	})
 	return c.watch(wi)
+	// 	err = NewErrorf(ErrorTypeResourceNotFound, "xds: CDS target %s not found in received response %+v", wi.target, resp)
 }

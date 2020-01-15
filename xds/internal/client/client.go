@@ -170,3 +170,5 @@ func (c *Client) Close() {
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
 }
+
+// FIXME: mememe check for LDS resource removed

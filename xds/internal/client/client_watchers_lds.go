@@ -44,4 +44,5 @@ func (c *Client) watchLDS(serviceName string, cb ldsCallbackFunc) (cancel func()
 		wi.timeout()
 	})
 	return c.watch(wi)
+	// 	err = NewErrorf(ErrorTypeResourceNotFound, "xds: LDS target %s not found in received response %+v", wi.target, resp)
 }
