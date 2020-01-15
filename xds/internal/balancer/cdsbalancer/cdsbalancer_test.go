@@ -413,12 +413,25 @@ func (s) TestResolverError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rErr := errors.New("cdsBalancer resolver error")
-	cdsB.ResolverError(rErr)
+	// Not a resource not found error. Watch shouldn't be canceled, and eds
+	// should receive the error.
+	otherErr := errors.New("cdsBalancer resolver error")
+	cdsB.ResolverError(otherErr)
+	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsB.waitForResolverError(otherErr); err != nil {
+		t.Fatal(err)
+	}
+
+	// A resource not found error. Watch should be canceled, and eds should
+	// receive the error.
+	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
+	cdsB.ResolverError(resourceErr)
 	if err := xdsC.WaitForCancelClusterWatch(); err != nil {
 		t.Fatal(err)
 	}
-	if err := edsB.waitForResolverError(rErr); err != nil {
+	if err := edsB.waitForResolverError(resourceErr); err != nil {
 		t.Fatal(err)
 	}
 }
