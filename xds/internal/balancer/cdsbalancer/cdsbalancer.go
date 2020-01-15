@@ -25,6 +25,8 @@ import (
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -183,13 +185,12 @@ func (b *cdsBalancer) run() {
 			// We first handle errors, if any, and then proceed with handling
 			// the update, only if the status quo has changed.
 			if err := update.err; err != nil {
-				// TODO: Should we cancel the watch only on specific errors?
-				if b.cancelWatch != nil {
+				// A resource-not-found error from resolver means the LDS/RDS
+				// resource was removed. Stop the watch.
+				if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && b.cancelWatch != nil {
 					b.cancelWatch()
 				}
-				if b.edsLB != nil {
-					b.edsLB.ResolverError(err)
-				}
+				b.handleErrorFromUpdate(err)
 			}
 			if b.client == update.client && b.clusterToWatch == update.clusterName {
 				break
@@ -221,9 +222,7 @@ func (b *cdsBalancer) run() {
 		case *watchUpdate:
 			if err := update.err; err != nil {
 				b.logger.Warningf("Watch error from xds-client %p: %v", b.client, err)
-				if b.edsLB != nil {
-					b.edsLB.ResolverError(err)
-				}
+				b.handleErrorFromUpdate(err)
 				break
 			}
 
@@ -268,6 +267,39 @@ func (b *cdsBalancer) run() {
 			b.logger.Infof("Shutdown")
 			return
 		}
+	}
+}
+
+// handleErrorFromUpdate handles both the error from ClientConn (from resolver)
+// and the error from xds client (from the watcher).
+//
+// If the error is connection error, it's passed down to the child policy.
+// Nothing needs to be done in CDS (e.g. it doesn't go into fallback).
+//
+// If the error is resource-not-found:
+// - If it's from resolver, it means LDS resources were removed. The CDS watch
+// should be canceled (and is already canceled by the caller of this function).
+// - If it's from xds client, it means CDS resource were removed. The CDS
+// watcher should keep watching.
+// In both cases, the error will be forwarded to EDS balancer.
+func (b *cdsBalancer) handleErrorFromUpdate(err error) {
+	// TODO: connection errors will be sent to the eds balancers directly, and
+	// also forwarded by the parent balancers/resolvers. So the eds balancer may
+	// see the same error multiple times. We way want to only forward the error
+	// to eds if it's not a connection error.
+	//
+	// This is not necessary today, because xds client never sends connection
+	// errors.
+
+	if b.edsLB != nil {
+		b.edsLB.ResolverError(err)
+	} else {
+		// If eds balancer was never created, fail the RPCs with
+		// errors.
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.TransientFailure,
+			Picker:            base.NewErrPicker(err),
+		})
 	}
 }
 
@@ -318,9 +350,6 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 }
 
 // ResolverError handles errors reported by the xdsResolver.
-//
-// TODO: Make it possible to differentiate between connection errors and
-// resource not found errors.
 func (b *cdsBalancer) ResolverError(err error) {
 	if b.isClosed() {
 		b.logger.Warningf("xds: received resolver error {%v} after cdsBalancer was closed", err)
