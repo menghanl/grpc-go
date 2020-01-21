@@ -182,6 +182,11 @@ func (b *cdsBalancer) run() {
 			// We first handle errors, if any, and then proceed with handling
 			// the update, only if the status quo has changed.
 			if err := update.err; err != nil {
+				// A resource not found error from resolver means the LDS/RDS
+				// resource was removed. Stop the watch.
+				if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && b.cancelWatch != nil {
+					b.cancelWatch()
+				}
 				b.handleErrorFromUpdate(err)
 			}
 			if b.client == update.client && b.clusterToWatch == update.clusterName {
@@ -255,7 +260,7 @@ func (b *cdsBalancer) run() {
 // handleErrorFromUpdate handles both the error from ClientComm (from resolver)
 // and the error from xds client (from the watcher).
 //
-// It stops the watch if error is resource-not-found (resource removed).
+// It doesn't stop the watch. Watch is stopped by the caller of this function.
 //
 // If there's an eds balancer, it hand the error to it. Otherwise, it fails the
 // RPCs with errors.
@@ -267,10 +272,6 @@ func (b *cdsBalancer) handleErrorFromUpdate(err error) {
 	//
 	// This is not necessary today, because xds client never sends connection
 	// errors.
-
-	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && b.cancelWatch != nil {
-		b.cancelWatch()
-	}
 
 	if b.edsLB != nil {
 		b.edsLB.ResolverError(err)

@@ -142,8 +142,23 @@ func (x *edsBalancer) run() {
 func (x *edsBalancer) handleErrorFromUpdate(err error) {
 	// TODO: Need to distinguish between connection errors and resource removed
 	// errors. For the former, we will need to handle it later on for fallback.
+
 	// For the latter, handle it by stopping the watch, closing sub-balancers
 	// and pickers.
+	// if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && x.cancelWatch != nil {
+	// 	b.cancelWatch()
+	// }
+	//
+	// if b.edsLB != nil {
+	// 	b.edsLB.ResolverError(err)
+	// } else {
+	// 	// If eds balancer was never created, fail the RPCs with
+	// 	// errors.
+	// 	b.cc.UpdateState(balancer.State{
+	// 		ConnectivityState: connectivity.TransientFailure,
+	// 		Picker:            base.NewErrPickerV2(err),
+	// 	})
+	// }
 
 	panic("www")
 }

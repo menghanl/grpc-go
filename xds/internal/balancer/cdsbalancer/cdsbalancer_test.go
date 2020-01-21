@@ -394,10 +394,10 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 			cdsUpdate: xdsclient.CDSUpdate{ServiceName: serviceName},
 			wantCCS:   edsCCS(serviceName, false, xdsC),
 		},
-		{
-			name:      "cdsWatch-returns-error",
-			updateErr: errors.New("cdsUpdate error"),
-		},
+		// {
+		// 	name:      "cdsWatch-returns-error",
+		// 	updateErr: errors.New("cdsUpdate error"),
+		// },
 	}
 
 	for _, test := range tests {
@@ -409,9 +409,69 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 	}
 }
 
-// TestResolverError verifies that an existing watch is cancelled when a
-// resolver error is received by the cdsBalancer, and also that the same error
-// is propagated to the edsBalancer.
+func (s) TestHandleClusterUpdateError(t *testing.T) {
+	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
+	defer func() {
+		cancel()
+		cdsB.Close()
+	}()
+
+	// An error before eds balancer is built. Should result in an error picker.
+	// Not a resource not found error, watch shouldn't be canceled.
+	err1 := errors.New("cdsBalancer resolver error 1")
+	xdsC.InvokeWatchClusterCallback(xdsclient.CDSUpdate{}, err1)
+	// if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{xdsclient.CDSUpdate{}, err1}, balancer.ClientConnState{}, edsB); err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// cdsB.ResolverError(err1)
+
+	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+		t.Fatal("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsB.waitForResolverError(err1); err == nil {
+		t.Fatal("eds balancer shouldn't get error (shouldn't be built yet)")
+	}
+	if state, err := tcc.newPickerCh.Receive(); err != nil {
+		t.Fatalf("failed to get picker, expect an error picker")
+	} else {
+		picker := state.(balancer.State).Picker
+		if _, perr := picker.Pick(balancer.PickInfo{}); perr == nil {
+			t.Fatalf("want picker to always fail, got nil")
+		}
+	}
+
+	cdsUpdate := xdsclient.CDSUpdate{ServiceName: serviceName}
+	wantCCS := edsCCS(serviceName, false, xdsC)
+	if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
+		t.Fatal(err)
+	}
+
+	// // Not a resource not found error, watch shouldn't be canceled, and eds
+	// // should receive the error.
+	// err2 := errors.New("cdsBalancer resolver error 2")
+	// cdsB.ResolverError(err2)
+	// if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+	// 	t.Fatal("watch was canceled, want not canceled (timeout error)")
+	// }
+	// if err := edsB.waitForResolverError(err2); err != nil {
+	// 	t.Fatal(err)
+	// }
+	//
+	// // A resource not found error. Watch should be canceled, and eds should
+	// // receive the error.
+	// resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
+	// cdsB.ResolverError(resourceErr)
+	// if err := xdsC.WaitForCancelClusterWatch(); err != nil {
+	// 	t.Fatal(err)
+	// }
+	// if err := edsB.waitForResolverError(resourceErr); err != nil {
+	// 	t.Fatal(err)
+	// }
+}
+
+// TestResolverError verifies that resolvers errors (with type
+// resource-not-found or others) are handled correctly.
 func (s) TestResolverError(t *testing.T) {
 	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
