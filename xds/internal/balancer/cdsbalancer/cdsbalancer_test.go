@@ -420,12 +420,6 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// Not a resource not found error, watch shouldn't be canceled.
 	err1 := errors.New("cdsBalancer resolver error 1")
 	xdsC.InvokeWatchClusterCallback(xdsclient.CDSUpdate{}, err1)
-	// if err := invokeWatchCbAndWait(xdsC, cdsWatchInfo{xdsclient.CDSUpdate{}, err1}, balancer.ClientConnState{}, edsB); err != nil {
-	// 	t.Fatal(err)
-	// }
-
-	// cdsB.ResolverError(err1)
-
 	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
