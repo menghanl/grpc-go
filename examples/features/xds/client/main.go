@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"google.golang.org/grpc/metadata"
 
 	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 )
@@ -85,11 +86,23 @@ func main() {
 	defer conn.Close()
 	c := pb.NewGreeterClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
-	if err != nil {
-		log.Fatalf("could not greet: %v", err)
+	m := make(map[string]int)
+
+	for {
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+			defer cancel()
+			ctx = metadata.NewOutgoingContext(
+				ctx,
+				metadata.Pairs("key", "value"),
+			)
+			r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
+			if err != nil {
+				log.Printf("could not greet: %v", err)
+			}
+			m[r.Message[len(r.Message)-5:]]++
+			log.Printf("Greeting: %s, %v", r.GetMessage(), m)
+		}()
+		time.Sleep(time.Second / 4)
 	}
-	log.Printf("Greeting: %s", r.GetMessage())
 }

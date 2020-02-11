@@ -124,7 +124,7 @@ func main() {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterGreeterServer(s, newServer(hostname))
+	pb.RegisterGreeterServer(s, newServer(hostname+fmt.Sprintf(" port: %d", port)))
 
 	reflection.Register(s)
 	healthServer := health.NewServer()

@@ -30,6 +30,8 @@ import (
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
+
+	_ "google.golang.org/grpc/xds"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
@@ -47,37 +49,18 @@ func unaryCallWithMetadata(c pb.EchoClient, message string) {
 
 	// Make RPC using the context with the metadata.
 	var header, trailer metadata.MD
-	r, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: message}, grpc.Header(&header), grpc.Trailer(&trailer))
+	_, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: message}, grpc.Header(&header), grpc.Trailer(&trailer))
 	if err != nil {
 		log.Fatalf("failed to call UnaryEcho: %v", err)
 	}
 
-	if t, ok := header["timestamp"]; ok {
-		fmt.Printf("timestamp from header:\n")
-		for i, e := range t {
-			fmt.Printf(" %d. %s\n", i, e)
-		}
-	} else {
-		log.Fatal("timestamp expected but doesn't exist in header")
-	}
-	if l, ok := header["location"]; ok {
-		fmt.Printf("location from header:\n")
-		for i, e := range l {
-			fmt.Printf(" %d. %s\n", i, e)
-		}
-	} else {
-		log.Fatal("location expected but doesn't exist in header")
-	}
-	fmt.Printf("response:\n")
-	fmt.Printf(" - %s\n", r.Message)
+	// fmt.Printf("unary response: ")
+	// fmt.Printf(" - %s, ", r.Message)
 
-	if t, ok := trailer["timestamp"]; ok {
-		fmt.Printf("timestamp from trailer:\n")
-		for i, e := range t {
-			fmt.Printf(" %d. %s\n", i, e)
-		}
+	if t, ok := header["from"]; ok {
+		fmt.Printf(" ------------ unary from server: %v\n", t)
 	} else {
-		log.Fatal("timestamp expected but doesn't exist in trailer")
+		log.Fatal("from expected but doesn't exist in header")
 	}
 }
 
@@ -99,48 +82,25 @@ func serverStreamingWithMetadata(c pb.EchoClient, message string) {
 		log.Fatalf("failed to get header from stream: %v", err)
 	}
 	// Read metadata from server's header.
-	if t, ok := header["timestamp"]; ok {
-		fmt.Printf("timestamp from header:\n")
-		for i, e := range t {
-			fmt.Printf(" %d. %s\n", i, e)
-		}
+	if t, ok := header["from"]; ok {
+		fmt.Printf(" ----------- server stream from server: %v\n", t)
 	} else {
-		log.Fatal("timestamp expected but doesn't exist in header")
-	}
-	if l, ok := header["location"]; ok {
-		fmt.Printf("location from header:\n")
-		for i, e := range l {
-			fmt.Printf(" %d. %s\n", i, e)
-		}
-	} else {
-		log.Fatal("location expected but doesn't exist in header")
+		log.Fatal("from expected but doesn't exist in header")
 	}
 
 	// Read all the responses.
 	var rpcStatus error
 	fmt.Printf("response:\n")
 	for {
-		r, err := stream.Recv()
+		_, err := stream.Recv()
 		if err != nil {
 			rpcStatus = err
 			break
 		}
-		fmt.Printf(" - %s\n", r.Message)
+		// fmt.Printf(" - %s\n", r.Message)
 	}
 	if rpcStatus != io.EOF {
 		log.Fatalf("failed to finish server streaming: %v", rpcStatus)
-	}
-
-	// Read the trailer after the RPC is finished.
-	trailer := stream.Trailer()
-	// Read metadata from server's trailer.
-	if t, ok := trailer["timestamp"]; ok {
-		fmt.Printf("timestamp from trailer:\n")
-		for i, e := range t {
-			fmt.Printf(" %d. %s\n", i, e)
-		}
-	} else {
-		log.Fatal("timestamp expected but doesn't exist in trailer")
 	}
 }
 
@@ -294,14 +254,20 @@ func main() {
 
 	c := pb.NewEchoClient(conn)
 
-	unaryCallWithMetadata(c, message)
-	time.Sleep(1 * time.Second)
+	// unaryCallWithMetadata(c, message)
+	// time.Sleep(1 * time.Second)
+	//
+	// serverStreamingWithMetadata(c, message)
+	// time.Sleep(1 * time.Second)
+	//
+	// clientStreamWithMetadata(c, message)
+	// time.Sleep(1 * time.Second)
+	//
+	// bidirectionalWithMetadata(c, message)
 
-	serverStreamingWithMetadata(c, message)
-	time.Sleep(1 * time.Second)
-
-	clientStreamWithMetadata(c, message)
-	time.Sleep(1 * time.Second)
-
-	bidirectionalWithMetadata(c, message)
+	for {
+		unaryCallWithMetadata(c, message)
+		serverStreamingWithMetadata(c, message)
+		time.Sleep(time.Second)
+	}
 }

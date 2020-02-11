@@ -69,7 +69,7 @@ func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoRes
 	}
 
 	// Create and send header.
-	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
+	header := metadata.New(map[string]string{"from": fmt.Sprintf("%d", *port), "location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	grpc.SendHeader(ctx, header)
 
 	fmt.Printf("request received: %v, sending echo\n", in)
@@ -98,7 +98,7 @@ func (s *server) ServerStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerSt
 	}
 
 	// Create and send header.
-	header := metadata.New(map[string]string{"location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
+	header := metadata.New(map[string]string{"from": fmt.Sprintf("%d", *port), "location": "MTV", "timestamp": time.Now().Format(timestampFormat)})
 	stream.SendHeader(header)
 
 	fmt.Printf("request received: %v\n", in)
