@@ -24,7 +24,7 @@ import (
 
 // The value chosen here is based on the default value of the
 // initial_fetch_timeout field in corepb.ConfigSource proto.
-var defaultWatchExpiryTimeout = 15 * time.Second
+var defaultWatchExpiryTimeout = 5 * time.Second
 
 const (
 	ldsURL = "type.googleapis.com/envoy.api.v2.Listener"
