@@ -182,7 +182,7 @@ func (b *cdsBalancer) run() {
 			// We first handle errors, if any, and then proceed with handling
 			// the update, only if the status quo has changed.
 			if err := update.err; err != nil {
-				// A resource not found error from resolver means the LDS/RDS
+				// A resource-not-found error from resolver means the LDS/RDS
 				// resource was removed. Stop the watch.
 				if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && b.cancelWatch != nil {
 					b.cancelWatch()
@@ -257,13 +257,18 @@ func (b *cdsBalancer) run() {
 	}
 }
 
-// handleErrorFromUpdate handles both the error from ClientComm (from resolver)
+// handleErrorFromUpdate handles both the error from ClientConn (from resolver)
 // and the error from xds client (from the watcher).
 //
-// It doesn't stop the watch. Watch is stopped by the caller of this function.
+// If the error is connection error, it's passed down to the child policy.
+// Nothing needs to be done in CDS (e.g. it doesn't go into fallback).
 //
-// If there's an eds balancer, it hand the error to it. Otherwise, it fails the
-// RPCs with errors.
+// If the error is resource-not-found:
+// - If it's from resolver, it means LDS resources were removed. The CDS watch
+// should be canceled (and is already canceled by the caller of this function).
+// - If it's from xds client, it means CDS resource were removed. The CDS
+// watcher should keep watching.
+// In both cases, the error will be forwarded to EDS balancer.
 func (b *cdsBalancer) handleErrorFromUpdate(err error) {
 	// TODO: connection errors will be sent to the eds balancers directly, and
 	// also forwarded by the parent balancers/resolvers. So the eds balancer may
@@ -331,9 +336,6 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 }
 
 // ResolverError handles errors reported by the xdsResolver.
-//
-// TODO: Make it possible to differentiate between connection errors and
-// resource not found errors.
 func (b *cdsBalancer) ResolverError(err error) {
 	if b.isClosed() {
 		grpclog.Warningf("xds: received resolver error {%v} after cdsBalancer was closed", err)
