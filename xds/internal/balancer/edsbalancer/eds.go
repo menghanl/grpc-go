@@ -130,25 +130,50 @@ func (x *edsBalancer) run() {
 		case <-x.ctx.Done():
 			if x.client != nil {
 				x.client.close()
+				x.client = nil
 			}
-			if x.edsImpl != nil {
-				x.edsImpl.Close()
-			}
+			x.edsImpl.Close()
 			return
 		}
 	}
 }
 
+// handleErrorFromUpdate handles both the error from ClientComm (from CDS
+// balancer) and the error from xds client (from the watcher).
+//
+// If the error is connection error, it should be handled for fallback purposes.
+//
+// If the error is resource-not-found:
+// - If it's from CDS balancer, it means CDS resources were removed. The EDS
+// watch should be canceled (and is already canceled by the caller of this
+// function).
+// - If it's from xds client, it means EDS resource were removed. The EDS
+// watcher should keep watching.
+// In both cases, the sub-balancers will be closed, and the future picks will
+// fail.
 func (x *edsBalancer) handleErrorFromUpdate(err error) {
 	// TODO: Need to distinguish between connection errors and resource removed
 	// errors. For the former, we will need to handle it later on for fallback.
-
-	// For the latter, handle it by stopping the watch, closing sub-balancers
-	// and pickers.
-	// if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound && x.cancelWatch != nil {
-	// 	b.cancelWatch()
-	// }
 	//
+	// For the latter, closing sub-balancers and fail the pickers.
+
+	// If it's a resource-not-found error
+	// - it could come from CDS balancer, so the CDS resources were removed
+	// - it could come from xds client, so the EDS resources were removed
+	// In both cases, the sub-balancers should be closed, and the picks should
+	// all fail.
+	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound {
+		// FIXME: does an empty update closes all sub-balancers?
+		//
+		// FIXME: what picker do we get after closing all sub-balancers? It
+		// should update picker with an error picker. Needs tests to verify.
+		x.edsImpl.HandleEDSResponse(&xdsclient.EDSUpdate{})
+	}
+
+	// FIXME: do we need to manually update the picker to an error picker with
+	// the err passed in? If we do, we need to make sure the picker won't be
+	// replaced by a later picker update.
+
 	// if b.edsLB != nil {
 	// 	b.edsLB.ResolverError(err)
 	// } else {
@@ -166,9 +191,7 @@ func (x *edsBalancer) handleErrorFromUpdate(err error) {
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
-		if x.edsImpl != nil {
-			x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
-		}
+		x.edsImpl.HandleSubConnStateChange(u.sc, u.state.ConnectivityState)
 	case *balancer.ClientConnState:
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
@@ -185,7 +208,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		// We will update the edsImpl with the new child policy, if we got a
 		// different one.
-		if x.edsImpl != nil && !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
+		if !reflect.DeepEqual(cfg.ChildPolicy, x.config.ChildPolicy) {
 			if cfg.ChildPolicy != nil {
 				x.edsImpl.HandleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {
@@ -195,7 +218,12 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 		x.config = cfg
 	case error:
-		// This is the resolver error.
+		// This is an error from the resolver (can be the parent CDS balancer).
+		if xdsclient.TypeOfError(u) == xdsclient.ErrorTypeResourceNotFound {
+			// A resource-not-found error, means the CDS resource was removed.
+			// Stop the EDS watch.
+			x.client.cancelWatch()
+		}
 		x.handleErrorFromUpdate(u)
 	default:
 		// unreachable path
