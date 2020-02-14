@@ -385,7 +385,22 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	edsLB.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
 }
 
+// TestXDSClientUpdateError verifies that errros from xdsclient update are
+// handled correctly.
+//
+// If it's resource-not-found, watch will NOT be canceled, new RPCs will fail.
+//
+// If it's connection error, nothing will happen. This will need to change to
+// handle fallback.
+func (s) TestXDSClientUpdateError(t *testing.T) {
+}
+
 // TestResolverError verifies that resolver errors are handled correctly.
+//
+// If it's resource-not-found, watch will be canceled, new RPCs will fail.
+//
+// If it's connection error, nothing will happen. This will need to change to
+// handle fallback.
 func (s) TestResolverError(t *testing.T) {
 	// xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	// defer func() {

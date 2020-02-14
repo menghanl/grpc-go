@@ -143,6 +143,13 @@ func (xdsC *Client) InvokeWatchEDSCallback(update *xdsclient.EDSUpdate, err erro
 	xdsC.edsCb(update, err)
 }
 
+// WaitForEDSClusterWatch waits for a EDS watch to be cancelled within a
+// reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
+func (xdsC *Client) WaitForEDSClusterWatch() error {
+	_, err := xdsC.edsCancelCh.Receive()
+	return err
+}
+
 // ReportLoadArgs wraps the arguments passed to ReportLoad.
 type ReportLoadArgs struct {
 	// Server is the name of the server to which the load is reported.
