@@ -138,7 +138,7 @@ func (x *edsBalancer) run() {
 	}
 }
 
-// handleErrorFromUpdate handles both the error from ClientComm (from CDS
+// handleErrorFromUpdate handles both the error from ClientConn (from CDS
 // balancer) and the error from xds client (from the watcher).
 //
 // If the error is connection error, it should be handled for fallback purposes.
@@ -185,7 +185,7 @@ func (x *edsBalancer) handleErrorFromUpdate(err error) {
 	// 	})
 	// }
 
-	panic("www")
+	// panic("www" + err.Error())
 }
 
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
