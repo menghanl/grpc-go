@@ -90,6 +90,7 @@ type fakeEDSBalancer struct {
 	cc                 balancer.ClientConn
 	childPolicy        *testutils.Channel
 	subconnStateChange *testutils.Channel
+	edsUpdate          *testutils.Channel
 	loadStore          lrs.Store
 }
 
@@ -101,8 +102,11 @@ func (f *fakeEDSBalancer) HandleChildPolicy(name string, config json.RawMessage)
 	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
 }
 
-func (f *fakeEDSBalancer) Close()                                         {}
-func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {}
+func (f *fakeEDSBalancer) HandleEDSResponse(edsResp *xdsclient.EDSUpdate) {
+	f.edsUpdate.Send(edsResp)
+}
+
+func (f *fakeEDSBalancer) Close() {}
 
 func (f *fakeEDSBalancer) waitForChildPolicy(wantPolicy *loadBalancingConfig) error {
 	val, err := f.childPolicy.Receive()
@@ -128,11 +132,24 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(wantState *scStateChange) er
 	return nil
 }
 
+func (f *fakeEDSBalancer) waitForEDSResponse(wantUpdate *xdsclient.EDSUpdate) error {
+	val, err := f.edsUpdate.Receive()
+	if err != nil {
+		return fmt.Errorf("error waiting for edsUpdate: %v", err)
+	}
+	gotUpdate := val.(*xdsclient.EDSUpdate)
+	if !reflect.DeepEqual(gotUpdate, wantUpdate) {
+		return fmt.Errorf("got edsUpdate %+v, want %+v", gotUpdate, wantUpdate)
+	}
+	return nil
+}
+
 func newFakeEDSBalancer(cc balancer.ClientConn, loadStore lrs.Store) edsBalancerImplInterface {
 	return &fakeEDSBalancer{
 		cc:                 cc,
 		childPolicy:        testutils.NewChannelWithSize(10),
 		subconnStateChange: testutils.NewChannelWithSize(10),
+		edsUpdate:          testutils.NewChannelWithSize(10),
 		loadStore:          loadStore,
 	}
 }
@@ -385,23 +402,68 @@ func (s) TestXDSSubConnStateChange(t *testing.T) {
 	edsLB.waitForSubConnStateChange(&scStateChange{sc: fsc, state: state})
 }
 
-// TestXDSClientUpdateError verifies that errros from xdsclient update are
+// TestErrorFromXDSClientUpdate verifies that errros from xdsclient update are
 // handled correctly.
 //
-// If it's resource-not-found, watch will NOT be canceled, new RPCs will fail.
+// If it's resource-not-found, watch will NOT be canceled, the EDS impl will
+// receive an empty EDS update, and new RPCs will fail.
 //
 // If it's connection error, nothing will happen. This will need to change to
 // handle fallback.
-func (s) TestXDSClientUpdateError(t *testing.T) {
+func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
+	edsLBCh := testutils.NewChannel()
+	xdsClientCh := testutils.NewChannel()
+	cancel := setup(edsLBCh, xdsClientCh)
+	defer cancel()
+
+	builder := balancer.Get(edsName)
+	cc := newNoopTestClientConn()
+	edsB, ok := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSClusterName}}).(*edsBalancer)
+	if !ok {
+		t.Fatalf("builder.Build(%s) returned type {%T}, want {*edsBalancer}", edsName, edsB)
+	}
+	defer edsB.Close()
+
+	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}}
+	edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Addresses: addrs},
+		BalancerConfig: &EDSConfig{
+			BalancerName:   testBalancerNameFooBar,
+			EDSServiceName: testEDSClusterName,
+		},
+	})
+
+	xdsC := waitForNewXDSClientWithEDSWatch(t, xdsClientCh, testBalancerNameFooBar)
+	xdsC.InvokeWatchEDSCallback(&xdsclient.EDSUpdate{}, nil)
+	edsLB := waitForNewEDSLB(t, edsLBCh)
+
+	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
+	xdsC.InvokeWatchEDSCallback(nil, resourceErr)
+	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
+		t.Fatalf("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsLB.waitForEDSResponse(&xdsclient.EDSUpdate{}); err != nil {
+		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
+	}
+
+	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
+	xdsC.InvokeWatchEDSCallback(nil, connectionErr)
+	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
+		t.Fatalf("watch was canceled, want not canceled (timeout error)")
+	}
+	if err := edsLB.waitForEDSResponse(&xdsclient.EDSUpdate{}); err == nil {
+		t.Fatalf("eds impl got EDS resp, want timeout error")
+	}
 }
 
-// TestResolverError verifies that resolver errors are handled correctly.
+// TestErrorFromResolver verifies that resolver errors are handled correctly.
 //
-// If it's resource-not-found, watch will be canceled, new RPCs will fail.
+// If it's resource-not-found, watch will be canceled, the EDS impl will receive
+// an empty EDS update, and new RPCs will fail.
 //
 // If it's connection error, nothing will happen. This will need to change to
 // handle fallback.
-func (s) TestResolverError(t *testing.T) {
+func (s) TestErrorFromResolver(t *testing.T) {
 	// xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	// defer func() {
 	// 	cancel()

@@ -143,9 +143,9 @@ func (xdsC *Client) InvokeWatchEDSCallback(update *xdsclient.EDSUpdate, err erro
 	xdsC.edsCb(update, err)
 }
 
-// WaitForEDSClusterWatch waits for a EDS watch to be cancelled within a
+// WaitForCancelEDSWatch waits for a EDS watch to be cancelled within a
 // reasonable timeout, and returns testutils.ErrRecvTimeout otherwise.
-func (xdsC *Client) WaitForEDSClusterWatch() error {
+func (xdsC *Client) WaitForCancelEDSWatch() error {
 	_, err := xdsC.edsCancelCh.Receive()
 	return err
 }
