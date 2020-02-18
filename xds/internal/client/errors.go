@@ -20,6 +20,8 @@ package client
 
 import "fmt"
 
+// ErrorType is the type of the error that the watcher will receive from the xds
+// client.
 type ErrorType int
 
 const (

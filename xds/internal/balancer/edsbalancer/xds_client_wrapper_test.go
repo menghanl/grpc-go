@@ -143,7 +143,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
 	newEDS := func(update *xdsclient.EDSUpdate, err error) error {
-		edsRespChan.Send(update)
+		edsRespChan.Send(&edsUpdate{resp: update, err: err})
 		return nil
 	}
 
@@ -159,14 +159,20 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	if gotCluster != testEDSClusterName {
 		t.Fatalf("xdsClient.WatchEDS() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
-	xdsC.InvokeWatchEDSCallback(nil, errors.New("EDS watch callback error"))
+	watchErr := errors.New("EDS watch callback error")
+	xdsC.InvokeWatchEDSCallback(nil, watchErr)
 
 	// The callback is called with an error, expect no update from edsRespChan.
 	//
 	// TODO: check for loseContact() when errors indicating "lose contact" are
 	// handled correctly.
-	if gotUpdate, gotErr := edsRespChan.Receive(); gotErr != testutils.ErrRecvTimeout {
-		t.Fatalf("edsBalancer got edsUpdate {%+v, %v}, when none was expected", gotUpdate, gotErr)
+	gotUpdate, err := edsRespChan.Receive()
+	if err != nil {
+		t.Fatalf("edsBalancer failed to get edsUpdate %v", err)
+	}
+	update := gotUpdate.(*edsUpdate)
+	if update.resp != nil || update.err != watchErr {
+		t.Fatalf("want update {nil, %v}, got %+v", watchErr, update)
 	}
 }
 
