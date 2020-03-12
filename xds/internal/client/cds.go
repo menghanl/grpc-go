@@ -37,7 +37,6 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 	}
 
 	var returnUpdate CDSUpdate
-	localCache := make(map[string]CDSUpdate)
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -58,13 +57,11 @@ func (v2c *v2Client) handleCDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if update.ServiceName == "" {
 			update.ServiceName = cluster.GetName()
 		}
-		localCache[cluster.GetName()] = update
 		v2c.logger.Debugf("Resource with name %v, type %T, value %+v added to cache", cluster.GetName(), update, update)
 		if cluster.GetName() == wi.target[0] {
 			returnUpdate = update
 		}
 	}
-	v2c.cdsCache = localCache
 
 	var err error
 	if returnUpdate.ServiceName == "" {

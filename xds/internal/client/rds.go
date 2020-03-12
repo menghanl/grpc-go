@@ -71,15 +71,6 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 	}
 
-	// Update the cache in the v2Client only after we have confirmed that all
-	// resources in the received response were good.
-	for k, v := range localCache {
-		// TODO: Need to handle deletion of entries from the cache based on LDS
-		// watch calls. Not handling it does not affect correctness, but leads
-		// to unnecessary memory consumption.
-		v2c.rdsCache[k] = v
-	}
-
 	if returnCluster != "" {
 		// We stop the expiry timer and invoke the callback only when we have
 		// received the resource that we are watching for. Since RDS is an

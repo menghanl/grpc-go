@@ -74,27 +74,6 @@ type v2Client struct {
 	versionMap map[string]string
 	// nonceMap contains the nonce from the most recent received response.
 	nonceMap map[string]string
-	// rdsCache maintains a mapping of {routeConfigName --> clusterName} from
-	// validated route configurations received in RDS responses. We cache all
-	// valid route configurations, whether or not we are interested in them
-	// when we received them (because we could become interested in them in the
-	// future and the server wont send us those resources again).
-	// Protected by the above mutex.
-	//
-	// TODO: remove RDS cache. The updated spec says client can ignore
-	// unrequested resources.
-	// https://github.com/envoyproxy/envoy/blob/master/api/xds_protocol.rst#resource-hints
-	rdsCache map[string]string
-	// rdsCache maintains a mapping of {clusterName --> CDSUpdate} from
-	// validated cluster configurations received in CDS responses. We cache all
-	// valid cluster configurations, whether or not we are interested in them
-	// when we received them (because we could become interested in them in the
-	// future and the server wont send us those resources again). This is only
-	// to support legacy management servers that do not honor the
-	// resource_names field. As per the latest spec, the server should resend
-	// the response when the request changes, even if it had sent the same
-	// resource earlier (when not asked for). Protected by the above mutex.
-	cdsCache map[string]CDSUpdate
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
@@ -112,8 +91,6 @@ func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) 
 		watchMap:   make(map[string]*watchInfo),
 		versionMap: make(map[string]string),
 		nonceMap:   make(map[string]string),
-		rdsCache:   make(map[string]string),
-		cdsCache:   make(map[string]CDSUpdate),
 	}
 	v2c.ctx, v2c.cancelCtx = context.WithCancel(context.Background())
 
@@ -495,17 +472,6 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			v2c.mu.Unlock()
 		})
 	case rdsURL:
-		routeName := wi.target[0]
-		if cluster := v2c.rdsCache[routeName]; cluster != "" {
-			var err error
-			if v2c.watchMap[ldsURL] == nil {
-				cluster = ""
-				err = fmt.Errorf("xds: no LDS watcher found when handling RDS watch for route {%v} from cache", routeName)
-			}
-			v2c.logger.Infof("Resource with name %v, type %v found in cache", routeName, wi.typeURL)
-			wi.rdsCallback(rdsUpdate{clusterName: cluster}, err)
-			return
-		}
 		// Add the watch expiry timer only for new watches we don't find in
 		// the cache, and return from here.
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
@@ -514,16 +480,6 @@ func (v2c *v2Client) checkCacheAndUpdateWatchMap(wi *watchInfo) {
 			v2c.mu.Unlock()
 		})
 	case cdsURL:
-		clusterName := wi.target[0]
-		if update, ok := v2c.cdsCache[clusterName]; ok {
-			var err error
-			if v2c.watchMap[cdsURL] == nil {
-				err = fmt.Errorf("xds: no CDS watcher found when handling CDS watch for cluster {%v} from cache", clusterName)
-			}
-			v2c.logger.Infof("Resource with name %v, type %v found in cache", clusterName, wi.typeURL)
-			wi.cdsCallback(update, err)
-			return
-		}
 		wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
 			v2c.mu.Lock()
 			wi.cdsCallback(CDSUpdate{}, fmt.Errorf("xds: CDS target %s not found, watcher timeout", wi.target))

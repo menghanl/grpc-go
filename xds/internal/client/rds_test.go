@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	"github.com/golang/protobuf/proto"
@@ -32,17 +31,6 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
-
-func (v2c *v2Client) cloneRDSCacheForTesting() map[string]string {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
-	cloneCache := make(map[string]string)
-	for k, v := range v2c.rdsCache {
-		cloneCache[k] = v
-	}
-	return cloneCache
-}
 
 func (s) TestRDSGetClusterFromRouteConfiguration(t *testing.T) {
 	tests := []struct {
@@ -310,118 +298,6 @@ type rdsTestOp struct {
 	wantRDSCache map[string]string
 	// wantWatchCallback specifies if the watch callback should be invoked.
 	wantWatchCallback bool
-}
-
-// testRDSCaching is a helper function which starts a fake xDS server, makes a
-// ClientConn to it, creates a v2Client using it, registers an LDS watcher and
-// pushes a good LDS response. It then reads a bunch of test operations to be
-// performed from rdsTestOps and returns error, if any, on the provided error
-// channel. This is executed in a separate goroutine.
-func testRDSCaching(t *testing.T, rdsTestOps []rdsTestOp, errCh *testutils.Channel) {
-	t.Helper()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-	doLDS(t, v2c, fakeServer)
-
-	callbackCh := make(chan struct{}, 1)
-	for _, rdsTestOp := range rdsTestOps {
-		// Register a watcher if required, and use a channel to signal the
-		// successful invocation of the callback.
-		if rdsTestOp.target != "" {
-			v2c.watchRDS(rdsTestOp.target, func(u rdsUpdate, err error) {
-				t.Logf("Received callback with rdsUpdate {%+v} and error {%v}", u, err)
-				callbackCh <- struct{}{}
-			})
-			t.Logf("Registered a watcher for RDS target: %v...", rdsTestOp.target)
-
-			// Wait till the request makes it to the fakeServer. This ensures that
-			// the watch request has been processed by the v2Client.
-			if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-				errCh.Send(fmt.Errorf("Timeout waiting for RDS request: %v", err))
-			}
-			t.Log("FakeServer received request...")
-		}
-
-		// Directly push the response through a call to handleRDSResponse,
-		// thereby bypassing the fakeServer.
-		if rdsTestOp.responseToSend != nil {
-			resp := rdsTestOp.responseToSend.Resp.(*discoverypb.DiscoveryResponse)
-			if err := v2c.handleRDSResponse(resp); (err != nil) != rdsTestOp.wantOpErr {
-				errCh.Send(fmt.Errorf("v2c.handleRDSResponse(%+v) returned err: %v", resp, err))
-				return
-			}
-		}
-
-		// If the test needs the callback to be invoked, just verify that
-		// it was invoked. Since we verify the contents of the cache, it's
-		// ok not to verify the contents of the callback.
-		if rdsTestOp.wantWatchCallback {
-			<-callbackCh
-		}
-
-		if !cmp.Equal(v2c.cloneRDSCacheForTesting(), rdsTestOp.wantRDSCache) {
-			errCh.Send(fmt.Errorf("gotRDSCache: %v, wantRDSCache: %v", v2c.rdsCache, rdsTestOp.wantRDSCache))
-			return
-		}
-	}
-	t.Log("Completed all test ops successfully...")
-	errCh.Send(nil)
-}
-
-// TestRDSCaching tests some end-to-end RDS flows using a fake xDS server, and
-// verifies the RDS data cached at the v2Client.
-func (s) TestRDSCaching(t *testing.T) {
-	ops := []rdsTestOp{
-		// Add an RDS watch for a resource name (goodRouteName1), which returns one
-		// matching resource in the response.
-		{
-			target:            goodRouteName1,
-			responseToSend:    &fakeserver.Response{Resp: goodRDSResponse1},
-			wantRDSCache:      map[string]string{goodRouteName1: goodClusterName1},
-			wantWatchCallback: true,
-		},
-		// Push an RDS response with a new resource. This resource is considered
-		// good because its domain field matches our LDS watch target, but the
-		// routeConfigName does not match our RDS watch (so the watch callback will
-		// not be invoked). But this should still be cached.
-		{
-			responseToSend: &fakeserver.Response{Resp: goodRDSResponse2},
-			wantRDSCache: map[string]string{
-				goodRouteName1: goodClusterName1,
-				goodRouteName2: goodClusterName2,
-			},
-		},
-		// Push an uninteresting RDS response. This should cause handleRDSResponse
-		// to return an error. But the watch callback should not be invoked, and
-		// the cache should not be updated.
-		{
-			responseToSend: &fakeserver.Response{Resp: uninterestingRDSResponse},
-			wantOpErr:      true,
-			wantRDSCache: map[string]string{
-				goodRouteName1: goodClusterName1,
-				goodRouteName2: goodClusterName2,
-			},
-		},
-		// Switch the watch target to goodRouteName2, which was already cached.  No
-		// response is received from the server (as expected), but we want the
-		// callback to be invoked with the new clusterName.
-		{
-			target: goodRouteName2,
-			wantRDSCache: map[string]string{
-				goodRouteName1: goodClusterName1,
-				goodRouteName2: goodClusterName2,
-			},
-			wantWatchCallback: true,
-		},
-	}
-	errCh := testutils.NewChannel()
-	go testRDSCaching(t, ops, errCh)
-	waitForNilErr(t, errCh)
 }
 
 // TestRDSWatchExpiryTimer tests the case where the client does not receive an

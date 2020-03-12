@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/golang/protobuf/proto"
@@ -40,17 +39,6 @@ const (
 	serviceName1 = "foo-service"
 	serviceName2 = "bar-service"
 )
-
-func (v2c *v2Client) cloneCDSCacheForTesting() map[string]CDSUpdate {
-	v2c.mu.Lock()
-	defer v2c.mu.Unlock()
-
-	cloneCache := make(map[string]CDSUpdate)
-	for k, v := range v2c.cdsCache {
-		cloneCache[k] = v
-	}
-	return cloneCache
-}
 
 func (s) TestValidateCluster(t *testing.T) {
 	emptyUpdate := CDSUpdate{ServiceName: "", EnableLRS: false}
@@ -263,114 +251,6 @@ type cdsTestOp struct {
 	wantCDSCache map[string]CDSUpdate
 	// wantWatchCallback specifies if the watch callback should be invoked.
 	wantWatchCallback bool
-}
-
-// testCDSCaching is a helper function which starts a fake xDS server, makes a
-// ClientConn to it, creates a v2Client using it.  It then reads a bunch of
-// test operations to be performed from cdsTestOps and returns error, if any,
-// on the provided error channel. This is executed in a separate goroutine.
-func testCDSCaching(t *testing.T, cdsTestOps []cdsTestOp, errCh *testutils.Channel) {
-	t.Helper()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-
-	callbackCh := make(chan struct{}, 1)
-	for _, cdsTestOp := range cdsTestOps {
-		// Register a watcher if required, and use a channel to signal the
-		// successful invocation of the callback.
-		if cdsTestOp.target != "" {
-			v2c.watchCDS(cdsTestOp.target, func(u CDSUpdate, err error) {
-				t.Logf("Received callback with CDSUpdate {%+v} and error {%v}", u, err)
-				callbackCh <- struct{}{}
-			})
-			t.Logf("Registered a watcher for CDS target: %v...", cdsTestOp.target)
-
-			// Wait till the request makes it to the fakeServer. This ensures that
-			// the watch request has been processed by the v2Client.
-			if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-				errCh.Send(fmt.Errorf("Timeout waiting for CDS request: %v", err))
-				return
-			}
-			t.Log("FakeServer received request...")
-		}
-
-		// Directly push the response through a call to handleCDSResponse,
-		// thereby bypassing the fakeServer.
-		if cdsTestOp.responseToSend != nil {
-			resp := cdsTestOp.responseToSend.Resp.(*discoverypb.DiscoveryResponse)
-			if err := v2c.handleCDSResponse(resp); (err != nil) != cdsTestOp.wantOpErr {
-				errCh.Send(fmt.Errorf("v2c.handleRDSResponse(%+v) returned err: %v", resp, err))
-				return
-			}
-		}
-
-		// If the test needs the callback to be invoked, just verify that
-		// it was invoked. Since we verify the contents of the cache, it's
-		// ok not to verify the contents of the callback.
-		if cdsTestOp.wantWatchCallback {
-			<-callbackCh
-		}
-
-		if !cmp.Equal(v2c.cloneCDSCacheForTesting(), cdsTestOp.wantCDSCache) {
-			errCh.Send(fmt.Errorf("gotCDSCache: %v, wantCDSCache: %v", v2c.rdsCache, cdsTestOp.wantCDSCache))
-			return
-		}
-	}
-	t.Log("Completed all test ops successfully...")
-	errCh.Send(nil)
-}
-
-// TestCDSCaching tests some end-to-end CDS flows using a fake xDS server, and
-// verifies the CDS data cached at the v2Client.
-func (s) TestCDSCaching(t *testing.T) {
-	ops := []cdsTestOp{
-		// Add an CDS watch for a cluster name (clusterName1), which returns one
-		// matching resource in the response.
-		{
-			target:         clusterName1,
-			responseToSend: &fakeserver.Response{Resp: goodCDSResponse1},
-			wantCDSCache: map[string]CDSUpdate{
-				clusterName1: {serviceName1, true},
-			},
-			wantWatchCallback: true,
-		},
-		// Push an CDS response which contains a new resource (apart from the
-		// one received in the previous response). This should be cached.
-		{
-			responseToSend: &fakeserver.Response{Resp: cdsResponseWithMultipleResources},
-			wantCDSCache: map[string]CDSUpdate{
-				clusterName1: {serviceName1, true},
-				clusterName2: {serviceName2, false},
-			},
-			wantWatchCallback: true,
-		},
-		// Switch the watch target to clusterName2, which was already cached.  No
-		// response is received from the server (as expected), but we want the
-		// callback to be invoked with the new serviceName.
-		{
-			target: clusterName2,
-			wantCDSCache: map[string]CDSUpdate{
-				clusterName1: {serviceName1, true},
-				clusterName2: {serviceName2, false},
-			},
-			wantWatchCallback: true,
-		},
-		// Push an empty CDS response. This should clear the cache.
-		{
-			responseToSend:    &fakeserver.Response{Resp: &xdspb.DiscoveryResponse{TypeUrl: cdsURL}},
-			wantOpErr:         false,
-			wantCDSCache:      map[string]CDSUpdate{},
-			wantWatchCallback: true,
-		},
-	}
-	errCh := testutils.NewChannel()
-	go testCDSCaching(t, ops, errCh)
-	waitForNilErr(t, errCh)
 }
 
 // TestCDSWatchExpiryTimer tests the case where the client does not receive an
