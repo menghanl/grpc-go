@@ -40,6 +40,12 @@ var defaultWatchExpiryTimeout = 15 * time.Second
 // v2Client performs the actual xDS RPCs using the xDS v2 API. It creates a
 // single ADS stream on which the different types of xDS requests and responses
 // are multiplexed.
+//
+// This client's main purpose is to make the RPC, build/parse proto messages,
+// and doing ACK/NACK. It's a naive implementation that sends whatever the upper
+// layer tells it to send. It will call the callback with everything in every
+// response. It doesn't keep cache, or check for duplicates.
+//
 // The reason for splitting this out from the top level xdsClient object is
 // because there is already an xDS v3Aplha API in development. If and when we
 // want to switch to that, this separation will ease that process.
