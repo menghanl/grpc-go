@@ -25,10 +25,14 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// canceled, and the user needs to take care of it
 	var ccb func()
 	switch wiu.wi.typeURL {
-	// Other cases.
+	// FIXME(switch): Other cases.
 	case cdsURL:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
 			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
+		}
+	case edsURL:
+		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+			ccb = func() { wiu.wi.edsCallback(wiu.update.(EndpointsUpdate), wiu.err) }
 		}
 	}
 	c.mu.Unlock()
@@ -44,11 +48,13 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 
 	var watchers map[string]*watchInfoSet
 	switch typeURL {
+	// FIXME(switch): Other cases.
 	// case ldsURL:
 	// case rdsURL:
 	case cdsURL:
 		watchers = c.cdsWatchers
-		// case edsURL:
+	case edsURL:
+		watchers = c.edsWatchers
 	}
 	for name, update := range d {
 		if s, ok := watchers[name]; ok {
@@ -64,9 +70,14 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	var f func(name string, update interface{})
 	switch typeURL {
+	// FIXME(switch): Other cases.
 	case cdsURL:
 		f = func(name string, update interface{}) {
 			c.cdsCache[name] = update.(ClusterUpdate)
+		}
+	case edsURL:
+		f = func(name string, update interface{}) {
+			c.edsCache[name] = update.(EndpointsUpdate)
 		}
 	}
 	for name, update := range d {

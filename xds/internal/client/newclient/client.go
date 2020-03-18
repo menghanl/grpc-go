@@ -73,6 +73,9 @@ type Client struct {
 	mu          sync.Mutex
 	cdsWatchers map[string]*watchInfoSet
 	cdsCache    map[string]ClusterUpdate
+	edsWatchers map[string]*watchInfoSet
+	edsCache    map[string]EndpointsUpdate
+	// FIXME(switch): Other cases.
 }
 
 // New returns a new xdsClient configured with opts.
@@ -102,6 +105,9 @@ func New(opts Options) (*Client, error) {
 		updateCh:    buffer.NewUnbounded(),
 		cdsWatchers: make(map[string]*watchInfoSet),
 		cdsCache:    make(map[string]ClusterUpdate),
+		edsWatchers: make(map[string]*watchInfoSet),
+		edsCache:    make(map[string]EndpointsUpdate),
+		// FIXME(switch): Other cases.
 	}
 
 	cc, err := grpc.Dial(opts.Config.BalancerName, dopts...)
