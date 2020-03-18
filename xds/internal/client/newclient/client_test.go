@@ -9,6 +9,14 @@ import (
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
 
+const (
+	testXDSServer   = "xds-server"
+	chanRecvTimeout = 100 * time.Millisecond
+
+	testClusterName = "test-cluster"
+	testServiceName = "test-service"
+)
+
 type testXDSV2Client struct {
 	r updateReceiver
 

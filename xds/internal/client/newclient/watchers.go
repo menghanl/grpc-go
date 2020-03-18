@@ -16,9 +16,9 @@ const (
 	edsURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
-// CDSUpdate contains information from a received CDS response, which is of
+// ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
-type CDSUpdate struct {
+type ClusterUpdate struct {
 	// ServiceName is the service name corresponding to the clusterName which
 	// is being watched for through CDS.
 	ServiceName string
@@ -26,7 +26,7 @@ type CDSUpdate struct {
 	EnableLRS bool
 }
 
-type cdsCallbackFunc func(CDSUpdate, error)
+type cdsCallbackFunc func(ClusterUpdate, error)
 
 // watchInfo holds all the information about a watch call.
 type watchInfo struct {
@@ -42,7 +42,7 @@ type watchInfo struct {
 //
 // Note that during race, there's a small window where the callback can be
 // called after the watcher is canceled. The caller needs to handle this case.
-func (c *Client) WatchCluster(clusterName string, cdsCb func(CDSUpdate, error)) (cancel func()) {
+func (c *Client) WatchCluster(clusterName string, cdsCb func(ClusterUpdate, error)) (cancel func()) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	wi := &watchInfo{
@@ -52,7 +52,7 @@ func (c *Client) WatchCluster(clusterName string, cdsCb func(CDSUpdate, error)) 
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, CDSUpdate{}, fmt.Errorf("xds: CDS target %s not found, watcher timeout", clusterName))
+		c.scheduleCallback(wi, ClusterUpdate{}, fmt.Errorf("xds: CDS target %s not found, watcher timeout", clusterName))
 	})
 	return c.watch(wi)
 }

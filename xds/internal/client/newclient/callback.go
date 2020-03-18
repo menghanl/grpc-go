@@ -28,7 +28,7 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// Other cases.
 	case cdsURL:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
-			ccb = func() { wiu.wi.cdsCallback(wiu.update.(CDSUpdate), wiu.err) }
+			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
 		}
 	}
 	c.mu.Unlock()
@@ -66,7 +66,7 @@ func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	switch typeURL {
 	case cdsURL:
 		f = func(name string, update interface{}) {
-			c.cdsCache[name] = update.(CDSUpdate)
+			c.cdsCache[name] = update.(ClusterUpdate)
 		}
 	}
 	for name, update := range d {
