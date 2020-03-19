@@ -23,3 +23,8 @@ type ldsUpdate struct {
 	routeName string
 }
 type ldsCallbackFunc func(ldsUpdate, error)
+
+type rdsUpdate struct {
+	clusterName string
+}
+type rdsCallbackFunc func(rdsUpdate, error)

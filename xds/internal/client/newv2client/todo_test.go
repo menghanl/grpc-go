@@ -33,6 +33,44 @@ package client
 // 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
 // 		t.Fatalf("Timeout expired when expecting an LDS request")
 // 	}
+// // 	waitForNilErr(t, callbackCh)
+// // }
+//
+// // TestRDSWatchExpiryTimer tests the case where the client does not receive an
+// // RDS response for the request that it sends out. We want the watch callback
+// // to be invoked with an error once the watchExpiryTimer fires.
+// func (s) TestRDSWatchExpiryTimer(t *testing.T) {
+// 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+// 	defaultWatchExpiryTimeout = 500 * time.Millisecond
+// 	defer func() {
+// 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+// 	}()
+//
+// 	fakeServer, cc, cleanup := startServerAndGetCC(t)
+// 	defer cleanup()
+//
+// 	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+// 	defer v2c.close()
+// 	t.Log("Started xds v2Client...")
+// 	doLDS(t, v2c)
+//
+// 	callbackCh := testutils.NewChannel()
+// 	v2c.watchRDS(goodRouteName1, func(u rdsUpdate, err error) {
+// 		t.Logf("Received callback with rdsUpdate {%+v} and error {%v}", u, err)
+// 		if u.clusterName != "" {
+// 			callbackCh.Send(fmt.Errorf("received clusterName %v in rdsCallback, wanted empty string", u.clusterName))
+// 		}
+// 		if err == nil {
+// 			callbackCh.Send(errors.New("received nil error in rdsCallback"))
+// 		}
+// 		callbackCh.Send(nil)
+// 	})
+//
+// 	// Wait till the request makes it to the fakeServer. This ensures that
+// 	// the watch request has been processed by the v2Client.
+// 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+// 		t.Fatalf("Timeout expired when expecting an RDS request")
+// 	}
 // 	waitForNilErr(t, callbackCh)
 // }
 

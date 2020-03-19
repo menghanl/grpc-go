@@ -34,7 +34,7 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	returnUpdate := make(map[string]string)
+	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -51,10 +51,10 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 		}
 
 		// If we get here, it means that this resource was a good one.
-		returnUpdate[rc.GetName()] = cluster
+		returnUpdate[rc.GetName()] = rdsUpdate{clusterName: cluster}
 	}
 
-	// TODO: v2c.parent.newUpdate(rdsURL, returnUpdate)
+	v2c.parent.newUpdate(rdsURL, returnUpdate)
 	return nil
 }
 

@@ -74,6 +74,10 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
+	if test.typeURL == rdsURL {
+		doLDS(t, v2c, fakeServer)
+	}
+
 	// Register the watcher, this will also trigger the v2Client to send the xDS
 	// request.
 	v2c.addWatch(test.typeURL, test.resourceName)
@@ -94,7 +98,8 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	switch test.typeURL {
 	case ldsURL:
 		handleXDSResp = v2c.handleLDSResponse
-	// fixme(switch): other cases.
+	case rdsURL:
+		handleXDSResp = v2c.handleRDSResponse
 	case cdsURL:
 		handleXDSResp = v2c.handleCDSResponse
 	case edsURL:
@@ -123,7 +128,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		t.Fatal("Timeout expecting xDS update")
 	}
 	gotUpdate := uErr.(updateErr).u
-	opt := cmp.AllowUnexported( /*rdsUpdate{},*/ ldsUpdate{}, ClusterUpdate{}, EDSUpdate{})
+	opt := cmp.AllowUnexported(rdsUpdate{}, ldsUpdate{}, ClusterUpdate{}, EDSUpdate{})
 	if diff := cmp.Diff(gotUpdate, wantUpdate, opt); diff != "" {
 		t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
 	}
