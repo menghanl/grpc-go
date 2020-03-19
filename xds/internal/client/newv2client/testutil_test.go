@@ -92,6 +92,8 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// request channel afterwards.
 	var handleXDSResp func(response *xdspb.DiscoveryResponse) error
 	switch test.typeURL {
+	case ldsURL:
+		handleXDSResp = v2c.handleLDSResponse
 	// fixme(switch): other cases.
 	case cdsURL:
 		handleXDSResp = v2c.handleCDSResponse
@@ -121,7 +123,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		t.Fatal("Timeout expecting xDS update")
 	}
 	gotUpdate := uErr.(updateErr).u
-	opt := cmp.AllowUnexported( /*rdsUpdate{}, ldsUpdate{},*/ ClusterUpdate{}, EDSUpdate{})
+	opt := cmp.AllowUnexported( /*rdsUpdate{},*/ ldsUpdate{}, ClusterUpdate{}, EDSUpdate{})
 	if diff := cmp.Diff(gotUpdate, wantUpdate, opt); diff != "" {
 		t.Fatalf("got update : %+v, want %+v, diff: %s", gotUpdate, wantUpdate, diff)
 	}

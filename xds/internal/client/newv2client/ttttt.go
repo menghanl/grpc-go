@@ -18,3 +18,8 @@ type ClusterUpdate struct {
 }
 
 type cdsCallbackFunc func(ClusterUpdate, error)
+
+type ldsUpdate struct {
+	routeName string
+}
+type ldsCallbackFunc func(ldsUpdate, error)

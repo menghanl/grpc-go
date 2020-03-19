@@ -32,7 +32,7 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	returnUpdate := make(map[string]string)
+	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -47,10 +47,10 @@ func (v2c *v2Client) handleLDSResponse(resp *xdspb.DiscoveryResponse) error {
 		if err != nil {
 			return err
 		}
-		returnUpdate[lis.GetName()] = routeName
+		returnUpdate[lis.GetName()] = ldsUpdate{routeName: routeName}
 	}
 
-	// TODO: v2c.parent.newUpdate(ldsURL, returnUpdate)
+	v2c.parent.newUpdate(ldsURL, returnUpdate)
 	return nil
 }
 
