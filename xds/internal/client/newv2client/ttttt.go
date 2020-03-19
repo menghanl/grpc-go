@@ -16,3 +16,5 @@ type ClusterUpdate struct {
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
 }
+
+type cdsCallbackFunc func(ClusterUpdate, error)

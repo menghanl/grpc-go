@@ -99,9 +99,10 @@ type v2Client struct {
 }
 
 // newV2Client creates a new v2Client initialized with the passed arguments.
-func newV2Client(cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) *v2Client {
+func newV2Client(parent updateReceiver, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) *v2Client {
 	v2c := &v2Client{
 		cc:        cc,
+		parent:    parent,
 		nodeProto: nodeProto,
 		backoff:   backoff,
 
