@@ -95,6 +95,8 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// fixme(switch): other cases.
 	case cdsURL:
 		handleXDSResp = v2c.handleCDSResponse
+	case edsURL:
+		handleXDSResp = v2c.handleEDSResponse
 	}
 	if err := handleXDSResp(test.responseToHandle); (err != nil) != test.wantHandleErr {
 		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantHandleErr)

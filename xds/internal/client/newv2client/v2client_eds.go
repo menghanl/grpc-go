@@ -117,8 +117,8 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []Endpoint {
 //
 // This is temporarily exported to be used in eds balancer, before it switches
 // to use xds client. TODO: unexport.
-func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
-	ret := &EDSUpdate{}
+func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EDSUpdate, error) {
+	ret := EDSUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
 	}
@@ -126,7 +126,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
-			return nil, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
+			return EDSUpdate{}, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
 		}
 		lid := internal.Locality{
 			Region:  l.Region,
@@ -144,7 +144,7 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (*EDSUpdate, error) {
 	}
 	for i := 0; i < len(priorities); i++ {
 		if _, ok := priorities[uint32(i)]; !ok {
-			return nil, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
+			return EDSUpdate{}, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
 		}
 	}
 	return ret, nil
@@ -160,14 +160,14 @@ func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EDSUpdate {
 	if err != nil {
 		panic(err.Error())
 	}
-	return u
+	return &u
 }
 
 func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
 
-	returnUpdate := make(map[string]*EDSUpdate)
+	returnUpdate := make(map[string]interface{})
 	for _, r := range resp.GetResources() {
 		var resource ptypes.DynamicAny
 		if err := ptypes.UnmarshalAny(r, &resource); err != nil {
@@ -193,6 +193,6 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 		returnUpdate[cla.GetClusterName()] = u
 	}
 
-	// TODO: v2c.parent.newUpdate(edsURL, returnUpdate)
+	v2c.parent.newUpdate(edsURL, returnUpdate)
 	return nil
 }

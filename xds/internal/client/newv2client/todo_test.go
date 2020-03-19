@@ -36,3 +36,37 @@ package client
 // 	}
 // 	waitForNilErr(t, callbackCh)
 // }
+//
+// func (s) TestEDSWatchExpiryTimer(t *testing.T) {
+// 	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+// 	defaultWatchExpiryTimeout = 500 * time.Millisecond
+// 	defer func() {
+// 		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+// 	}()
+//
+// 	fakeServer, cc, cleanup := startServerAndGetCC(t)
+// 	defer cleanup()
+//
+// 	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+// 	defer v2c.close()
+// 	t.Log("Started xds v2Client...")
+//
+// 	callbackCh := testutils.NewChannel()
+// 	v2c.watchEDS(goodRouteName1, func(u *EDSUpdate, err error) {
+// 		t.Logf("Received callback with edsUpdate {%+v} and error {%v}", u, err)
+// 		if u != nil {
+// 			callbackCh.Send(fmt.Errorf("received EDSUpdate %v in edsCallback, wanted nil", u))
+// 		}
+// 		if err == nil {
+// 			callbackCh.Send(errors.New("received nil error in edsCallback"))
+// 		}
+// 		callbackCh.Send(nil)
+// 	})
+//
+// 	// Wait till the request makes it to the fakeServer. This ensures that
+// 	// the watch request has been processed by the v2Client.
+// 	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+// 		t.Fatalf("Timeout expired when expecting an CDS request")
+// 	}
+// 	waitForNilErr(t, callbackCh)
+// }
