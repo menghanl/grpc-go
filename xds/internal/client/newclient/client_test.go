@@ -15,8 +15,10 @@ const (
 	testXDSServer   = "xds-server"
 	chanRecvTimeout = 100 * time.Millisecond
 
-	testClusterName = "test-cluster"
-	testServiceName = "test-service"
+	testLDSName = "test-lds"
+	testRDSName = "test-rds"
+	testCDSName = "test-cds"
+	testEDSName = "test-eds"
 )
 
 type testXDSV2Client struct {
@@ -87,16 +89,16 @@ func TestWatchCallAnotherWatch(t *testing.T) {
 
 	clusterUpdateCh := testutils.NewChannel()
 	clusterErrCh := testutils.NewChannel()
-	c.WatchCluster(testClusterName, func(update ClusterUpdate, err error) {
+	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(update)
 		clusterErrCh.Send(err)
 		// Calls another watch inline, to ensure there's deadlock.
 		c.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
 	})
 
-	wantUpdate := ClusterUpdate{ServiceName: testServiceName}
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := clusterUpdateCh.Receive(); err != nil || u != wantUpdate {
@@ -106,9 +108,9 @@ func TestWatchCallAnotherWatch(t *testing.T) {
 		t.Errorf("unexpected clusterError: %v, error receiving from channel: %v", e, err)
 	}
 
-	wantUpdate2 := ClusterUpdate{ServiceName: testServiceName + "2"}
+	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate2,
+		testCDSName: wantUpdate2,
 	})
 
 	if u, err := clusterUpdateCh.Receive(); err != nil || u != wantUpdate2 {

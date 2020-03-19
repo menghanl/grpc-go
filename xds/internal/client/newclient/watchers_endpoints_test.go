@@ -40,14 +40,14 @@ func TestEndpointsWatch(t *testing.T) {
 
 	endpointsUpdateCh := testutils.NewChannel()
 	endpointsErrCh := testutils.NewChannel()
-	cancelWatch := c.WatchEndpoints(testClusterName, func(update EndpointsUpdate, err error) {
+	cancelWatch := c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(update)
 		endpointsErrCh.Send(err)
 	})
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	v2Client.r.newUpdate(edsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, wantUpdate) {
@@ -72,7 +72,7 @@ func TestEndpointsWatch(t *testing.T) {
 	// Cancel watch, and send update again.
 	cancelWatch()
 	v2Client.r.newUpdate(edsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := endpointsUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
@@ -107,7 +107,7 @@ func TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
 		endpointsErrCh := testutils.NewChannel()
 		endpointsErrChs = append(endpointsErrChs, endpointsErrCh)
-		cancelLastWatch = c.WatchEndpoints(testClusterName, func(update EndpointsUpdate, err error) {
+		cancelLastWatch = c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(update)
 			endpointsErrCh.Send(err)
 		})
@@ -115,7 +115,7 @@ func TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	v2Client.r.newUpdate(edsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	for i := 0; i < count; i++ {
@@ -130,7 +130,7 @@ func TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
 	v2Client.r.newUpdate(edsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	for i := 0; i < count-1; i++ {
@@ -173,7 +173,7 @@ func TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
 		endpointsErrCh := testutils.NewChannel()
 		endpointsErrChs = append(endpointsErrChs, endpointsErrCh)
-		c.WatchEndpoints(testClusterName+"1", func(update EndpointsUpdate, err error) {
+		c.WatchEndpoints(testCDSName+"1", func(update EndpointsUpdate, err error) {
 			endpointsUpdateCh.Send(update)
 			endpointsErrCh.Send(err)
 		})
@@ -182,7 +182,7 @@ func TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	// Third watch for a different name.
 	endpointsUpdateCh2 := testutils.NewChannel()
 	endpointsErrCh2 := testutils.NewChannel()
-	c.WatchEndpoints(testClusterName+"2", func(update EndpointsUpdate, err error) {
+	c.WatchEndpoints(testCDSName+"2", func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(update)
 		endpointsErrCh2.Send(err)
 	})
@@ -190,8 +190,8 @@ func TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	wantUpdate1 := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	wantUpdate2 := EndpointsUpdate{Localities: []Locality{testLocalities[1]}}
 	v2Client.r.newUpdate(edsURL, map[string]interface{}{
-		testClusterName + "1": wantUpdate1,
-		testClusterName + "2": wantUpdate2,
+		testCDSName + "1": wantUpdate1,
+		testCDSName + "2": wantUpdate2,
 	})
 
 	for i := 0; i < count; i++ {
@@ -227,14 +227,14 @@ func TestEndpointsWatchAfterCache(t *testing.T) {
 
 	endpointsUpdateCh := testutils.NewChannel()
 	endpointsErrCh := testutils.NewChannel()
-	c.WatchEndpoints(testClusterName, func(update EndpointsUpdate, err error) {
+	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(update)
 		endpointsErrCh.Send(err)
 	})
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	v2Client.r.newUpdate(edsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := endpointsUpdateCh.Receive(); err != nil || !cmp.Equal(u, wantUpdate) {
@@ -247,7 +247,7 @@ func TestEndpointsWatchAfterCache(t *testing.T) {
 	// Another watch for the resource in cache.
 	endpointsUpdateCh2 := testutils.NewChannel()
 	endpointsErrCh2 := testutils.NewChannel()
-	c.WatchEndpoints(testClusterName, func(update EndpointsUpdate, err error) {
+	c.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(update)
 		endpointsErrCh2.Send(err)
 	})

@@ -57,6 +57,9 @@ type edsCallbackFunc func(EndpointsUpdate, error)
 
 // WatchEndpoints uses EDS to discover endpoints in the provided clusterName.
 //
+// WatchEndpoints can be called multiple times, with same or different
+// clusterNames. Each call will start an independent watcher for the resource.
+//
 // Note that during race, there's a small window where the callback can be
 // called after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) WatchEndpoints(clusterName string, cb edsCallbackFunc) (cancel func()) {

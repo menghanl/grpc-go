@@ -71,6 +71,8 @@ type Client struct {
 
 	updateCh    *buffer.Unbounded // chan *watcherInfoWithUpdate
 	mu          sync.Mutex
+	ldsWatchers map[string]*watchInfoSet
+	ldsCache    map[string]ldsUpdate
 	cdsWatchers map[string]*watchInfoSet
 	cdsCache    map[string]ClusterUpdate
 	edsWatchers map[string]*watchInfoSet
@@ -103,6 +105,8 @@ func New(opts Options) (*Client, error) {
 		opts: opts,
 
 		updateCh:    buffer.NewUnbounded(),
+		ldsWatchers: make(map[string]*watchInfoSet),
+		ldsCache:    make(map[string]ldsUpdate),
 		cdsWatchers: make(map[string]*watchInfoSet),
 		cdsCache:    make(map[string]ClusterUpdate),
 		edsWatchers: make(map[string]*watchInfoSet),

@@ -20,6 +20,7 @@ type watchInfo struct {
 	typeURL string
 	target  string
 
+	ldsCallback ldsCallbackFunc
 	cdsCallback cdsCallbackFunc
 	edsCallback edsCallbackFunc
 	expiryTimer *time.Timer
@@ -32,7 +33,8 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	var watchers map[string]*watchInfoSet
 	switch wi.typeURL {
 	// FIXME(switch): Other cases.
-	// case ldsURL:
+	case ldsURL:
+		watchers = c.ldsWatchers
 	// case rdsURL:
 	case cdsURL:
 		watchers = c.cdsWatchers
@@ -53,6 +55,10 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	// value.
 	switch wi.typeURL {
 	// FIXME(switch): Other cases.
+	case ldsURL:
+		if v, ok := c.ldsCache[resourceName]; ok {
+			c.scheduleCallback(wi, v, nil)
+		}
 	case cdsURL:
 		if v, ok := c.cdsCache[resourceName]; ok {
 			c.scheduleCallback(wi, v, nil)

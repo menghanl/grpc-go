@@ -21,14 +21,14 @@ func TestClusterWatch(t *testing.T) {
 
 	clusterUpdateCh := testutils.NewChannel()
 	clusterErrCh := testutils.NewChannel()
-	cancelWatch := c.WatchCluster(testClusterName, func(update ClusterUpdate, err error) {
+	cancelWatch := c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(update)
 		clusterErrCh.Send(err)
 	})
 
-	wantUpdate := ClusterUpdate{ServiceName: testServiceName}
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := clusterUpdateCh.Receive(); err != nil || u != wantUpdate {
@@ -53,7 +53,7 @@ func TestClusterWatch(t *testing.T) {
 	// Cancel watch, and send update again.
 	cancelWatch()
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := clusterUpdateCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
@@ -88,15 +88,15 @@ func TestClusterTwoWatchSameResourceName(t *testing.T) {
 		clusterUpdateChs = append(clusterUpdateChs, clusterUpdateCh)
 		clusterErrCh := testutils.NewChannel()
 		clusterErrChs = append(clusterErrChs, clusterErrCh)
-		cancelLastWatch = c.WatchCluster(testClusterName, func(update ClusterUpdate, err error) {
+		cancelLastWatch = c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(update)
 			clusterErrCh.Send(err)
 		})
 	}
 
-	wantUpdate := ClusterUpdate{ServiceName: testServiceName}
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	for i := 0; i < count; i++ {
@@ -111,7 +111,7 @@ func TestClusterTwoWatchSameResourceName(t *testing.T) {
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	for i := 0; i < count-1; i++ {
@@ -154,7 +154,7 @@ func TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 		clusterUpdateChs = append(clusterUpdateChs, clusterUpdateCh)
 		clusterErrCh := testutils.NewChannel()
 		clusterErrChs = append(clusterErrChs, clusterErrCh)
-		c.WatchCluster(testClusterName+"1", func(update ClusterUpdate, err error) {
+		c.WatchCluster(testCDSName+"1", func(update ClusterUpdate, err error) {
 			clusterUpdateCh.Send(update)
 			clusterErrCh.Send(err)
 		})
@@ -163,16 +163,16 @@ func TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	// Third watch for a different name.
 	clusterUpdateCh2 := testutils.NewChannel()
 	clusterErrCh2 := testutils.NewChannel()
-	c.WatchCluster(testClusterName+"2", func(update ClusterUpdate, err error) {
+	c.WatchCluster(testCDSName+"2", func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(update)
 		clusterErrCh2.Send(err)
 	})
 
-	wantUpdate1 := ClusterUpdate{ServiceName: testServiceName + "1"}
-	wantUpdate2 := ClusterUpdate{ServiceName: testServiceName + "2"}
+	wantUpdate1 := ClusterUpdate{ServiceName: testEDSName + "1"}
+	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName + "1": wantUpdate1,
-		testClusterName + "2": wantUpdate2,
+		testCDSName + "1": wantUpdate1,
+		testCDSName + "2": wantUpdate2,
 	})
 
 	for i := 0; i < count; i++ {
@@ -208,14 +208,14 @@ func TestClusterWatchAfterCache(t *testing.T) {
 
 	clusterUpdateCh := testutils.NewChannel()
 	clusterErrCh := testutils.NewChannel()
-	c.WatchCluster(testClusterName, func(update ClusterUpdate, err error) {
+	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh.Send(update)
 		clusterErrCh.Send(err)
 	})
 
-	wantUpdate := ClusterUpdate{ServiceName: testServiceName}
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	v2Client.r.newUpdate(cdsURL, map[string]interface{}{
-		testClusterName: wantUpdate,
+		testCDSName: wantUpdate,
 	})
 
 	if u, err := clusterUpdateCh.Receive(); err != nil || u != wantUpdate {
@@ -228,7 +228,7 @@ func TestClusterWatchAfterCache(t *testing.T) {
 	// Another watch for the resource in cache.
 	clusterUpdateCh2 := testutils.NewChannel()
 	clusterErrCh2 := testutils.NewChannel()
-	c.WatchCluster(testClusterName, func(update ClusterUpdate, err error) {
+	c.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(update)
 		clusterErrCh2.Send(err)
 	})

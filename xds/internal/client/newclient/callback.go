@@ -26,6 +26,10 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	var ccb func()
 	switch wiu.wi.typeURL {
 	// FIXME(switch): Other cases.
+	case ldsURL:
+		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ldsUpdate), wiu.err) }
+		}
 	case cdsURL:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
 			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
@@ -49,7 +53,8 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	var watchers map[string]*watchInfoSet
 	switch typeURL {
 	// FIXME(switch): Other cases.
-	// case ldsURL:
+	case ldsURL:
+		watchers = c.ldsWatchers
 	// case rdsURL:
 	case cdsURL:
 		watchers = c.cdsWatchers
@@ -71,6 +76,10 @@ func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	var f func(name string, update interface{})
 	switch typeURL {
 	// FIXME(switch): Other cases.
+	case ldsURL:
+		f = func(name string, update interface{}) {
+			c.ldsCache[name] = update.(ldsUpdate)
+		}
 	case cdsURL:
 		f = func(name string, update interface{}) {
 			c.cdsCache[name] = update.(ClusterUpdate)
