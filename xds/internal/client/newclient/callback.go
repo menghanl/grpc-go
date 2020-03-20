@@ -25,10 +25,13 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// canceled, and the user needs to take care of it
 	var ccb func()
 	switch wiu.wi.typeURL {
-	// FIXME(switch): Other cases.
 	case ldsURL:
 		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
 			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ldsUpdate), wiu.err) }
+		}
+	case rdsURL:
+		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
+			ccb = func() { wiu.wi.rdsCallback(wiu.update.(rdsUpdate), wiu.err) }
 		}
 	case cdsURL:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s.has(wiu.wi) {
@@ -52,10 +55,10 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 
 	var watchers map[string]*watchInfoSet
 	switch typeURL {
-	// FIXME(switch): Other cases.
 	case ldsURL:
 		watchers = c.ldsWatchers
-	// case rdsURL:
+	case rdsURL:
+		watchers = c.rdsWatchers
 	case cdsURL:
 		watchers = c.cdsWatchers
 	case edsURL:
@@ -75,10 +78,13 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	var f func(name string, update interface{})
 	switch typeURL {
-	// FIXME(switch): Other cases.
 	case ldsURL:
 		f = func(name string, update interface{}) {
 			c.ldsCache[name] = update.(ldsUpdate)
+		}
+	case rdsURL:
+		f = func(name string, update interface{}) {
+			c.rdsCache[name] = update.(rdsUpdate)
 		}
 	case cdsURL:
 		f = func(name string, update interface{}) {

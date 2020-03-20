@@ -21,6 +21,7 @@ type watchInfo struct {
 	target  string
 
 	ldsCallback ldsCallbackFunc
+	rdsCallback rdsCallbackFunc
 	cdsCallback cdsCallbackFunc
 	edsCallback edsCallbackFunc
 	expiryTimer *time.Timer
@@ -32,10 +33,10 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	// nothing.
 	var watchers map[string]*watchInfoSet
 	switch wi.typeURL {
-	// FIXME(switch): Other cases.
 	case ldsURL:
 		watchers = c.ldsWatchers
-	// case rdsURL:
+	case rdsURL:
+		watchers = c.rdsWatchers
 	case cdsURL:
 		watchers = c.cdsWatchers
 	case edsURL:
@@ -54,9 +55,12 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	// If this clusterName is in cache, it will call the callback with the
 	// value.
 	switch wi.typeURL {
-	// FIXME(switch): Other cases.
 	case ldsURL:
 		if v, ok := c.ldsCache[resourceName]; ok {
+			c.scheduleCallback(wi, v, nil)
+		}
+	case rdsURL:
+		if v, ok := c.rdsCache[resourceName]; ok {
 			c.scheduleCallback(wi, v, nil)
 		}
 	case cdsURL:
