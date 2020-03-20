@@ -16,6 +16,8 @@ type ldsCallbackFunc func(ldsUpdate, error)
 // called after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchLDS(serviceName string, cb ldsCallbackFunc) (cancel func()) {
 	c.mu.Lock()
+	fmt.Println("watch LDS")
+	defer func() { fmt.Println("done watch LDS") }()
 	defer c.mu.Unlock()
 	wi := &watchInfo{
 		typeURL:     ldsURL,

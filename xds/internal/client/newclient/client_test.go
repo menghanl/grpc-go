@@ -24,7 +24,8 @@ const (
 type testXDSV2Client struct {
 	r updateReceiver
 
-	watches map[string]map[string]struct{}
+	addWatches    map[string]chan string
+	removeWatches map[string]chan string
 }
 
 func overrideNewV2Client() (<-chan *testXDSV2Client, func()) {
@@ -39,23 +40,29 @@ func overrideNewV2Client() (<-chan *testXDSV2Client, func()) {
 }
 
 func newTestXDSV2Client(r updateReceiver) *testXDSV2Client {
-	watches := make(map[string]map[string]struct{})
-	watches[ldsURL] = make(map[string]struct{})
-	watches[rdsURL] = make(map[string]struct{})
-	watches[cdsURL] = make(map[string]struct{})
-	watches[edsURL] = make(map[string]struct{})
+	addWatches := make(map[string]chan string)
+	addWatches[ldsURL] = make(chan string, 10)
+	addWatches[rdsURL] = make(chan string, 10)
+	addWatches[cdsURL] = make(chan string, 10)
+	addWatches[edsURL] = make(chan string, 10)
+	removeWatches := make(map[string]chan string)
+	removeWatches[ldsURL] = make(chan string, 10)
+	removeWatches[rdsURL] = make(chan string, 10)
+	removeWatches[cdsURL] = make(chan string, 10)
+	removeWatches[edsURL] = make(chan string, 10)
 	return &testXDSV2Client{
-		r:       r,
-		watches: watches,
+		r:             r,
+		addWatches:    addWatches,
+		removeWatches: removeWatches,
 	}
 }
 
 func (c *testXDSV2Client) addWatch(resourceType string, resourceName string) {
-	c.watches[resourceType][resourceName] = struct{}{}
+	c.addWatches[resourceType] <- resourceName
 }
 
 func (c *testXDSV2Client) removeWatch(resourceType string, resourceName string) {
-	delete(c.watches[resourceType], resourceName)
+	c.removeWatches[resourceType] <- resourceName
 }
 
 func (c *testXDSV2Client) close() {}

@@ -83,6 +83,7 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 			if s.len() == 0 {
 				delete(watchers, resourceName)
 				c.v2c.removeWatch(wi.typeURL, resourceName)
+				// TODO: remove item from cache.
 			}
 		}
 	}

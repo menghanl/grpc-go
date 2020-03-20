@@ -1,5 +1,7 @@
 package client
 
+import "fmt"
+
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
@@ -64,6 +66,7 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	case edsURL:
 		watchers = c.edsWatchers
 	}
+	fmt.Printf(" handling update %v, %v, with watchers %+v\n", typeURL, d, watchers)
 	for name, update := range d {
 		if s, ok := watchers[name]; ok {
 			s.forEach(func(wi *watchInfo) {
@@ -71,6 +74,23 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 			})
 		}
 	}
+	// TODO: for LDS and CDS, handle removing resources.
+	// var emptyUpdate interface{}
+	// switch typeURL {
+	// case ldsURL:
+	// 	emptyUpdate = ldsUpdate{}
+	// case cdsURL:
+	// 	emptyUpdate = ClusterUpdate{}
+	// }
+	// if emptyUpdate != nil {
+	// 	for name, s := range watchers {
+	// 		if _, ok := d[name]; !ok {
+	// 			s.forEach(func(wi *watchInfo) {
+	// 				c.scheduleCallback(wi, emptyUpdate, fmt.Errorf("resource removed"))
+	// 			})
+	// 		}
+	// 	}
+	// }
 	c.syncCache(typeURL, d)
 }
 
@@ -80,19 +100,29 @@ func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	switch typeURL {
 	case ldsURL:
 		f = func(name string, update interface{}) {
-			c.ldsCache[name] = update.(ldsUpdate)
+			if _, ok := c.ldsWatchers[name]; ok {
+				c.ldsCache[name] = update.(ldsUpdate)
+			}
+			fmt.Printf(" syncing cache %v, %v, cache afterwards %+v\n", typeURL, d, c.ldsCache)
 		}
 	case rdsURL:
 		f = func(name string, update interface{}) {
-			c.rdsCache[name] = update.(rdsUpdate)
+			if _, ok := c.rdsWatchers[name]; ok {
+				c.rdsCache[name] = update.(rdsUpdate)
+			}
+			fmt.Printf(" syncing cache %v, %v, cache afterwards %+v\n", typeURL, d, c.rdsCache)
 		}
 	case cdsURL:
 		f = func(name string, update interface{}) {
-			c.cdsCache[name] = update.(ClusterUpdate)
+			if _, ok := c.cdsWatchers[name]; ok {
+				c.cdsCache[name] = update.(ClusterUpdate)
+			}
 		}
 	case edsURL:
 		f = func(name string, update interface{}) {
-			c.edsCache[name] = update.(EndpointsUpdate)
+			if _, ok := c.edsWatchers[name]; ok {
+				c.edsCache[name] = update.(EndpointsUpdate)
+			}
 		}
 	}
 	for name, update := range d {
