@@ -16,8 +16,6 @@ type rdsCallbackFunc func(rdsUpdate, error)
 // called after the watcher is canceled. The caller needs to handle this case.
 func (c *Client) watchRDS(routeName string, cb rdsCallbackFunc) (cancel func()) {
 	c.mu.Lock()
-	fmt.Println("watch RDS")
-	defer func() { fmt.Println("done watch RDS") }()
 	defer c.mu.Unlock()
 	wi := &watchInfo{
 		typeURL:     rdsURL,

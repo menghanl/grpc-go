@@ -1,7 +1,5 @@
 package client
 
-import "fmt"
-
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
@@ -66,7 +64,6 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	case edsURL:
 		watchers = c.edsWatchers
 	}
-	fmt.Printf(" handling update %v, %v, with watchers %+v\n", typeURL, d, watchers)
 	for name, update := range d {
 		if s, ok := watchers[name]; ok {
 			s.forEach(func(wi *watchInfo) {
@@ -103,14 +100,12 @@ func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 			if _, ok := c.ldsWatchers[name]; ok {
 				c.ldsCache[name] = update.(ldsUpdate)
 			}
-			fmt.Printf(" syncing cache %v, %v, cache afterwards %+v\n", typeURL, d, c.ldsCache)
 		}
 	case rdsURL:
 		f = func(name string, update interface{}) {
 			if _, ok := c.rdsWatchers[name]; ok {
 				c.rdsCache[name] = update.(rdsUpdate)
 			}
-			fmt.Printf(" syncing cache %v, %v, cache afterwards %+v\n", typeURL, d, c.rdsCache)
 		}
 	case cdsURL:
 		f = func(name string, update interface{}) {
