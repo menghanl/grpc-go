@@ -126,10 +126,10 @@ package client
 // 	t.Log("Started xds v2Client...")
 //
 // 	callbackCh := testutils.NewChannel()
-// 	v2c.watchEDS(goodRouteName1, func(u *EDSUpdate, err error) {
+// 	v2c.watchEDS(goodRouteName1, func(u *EndpointsUpdate, err error) {
 // 		t.Logf("Received callback with edsUpdate {%+v} and error {%v}", u, err)
 // 		if u != nil {
-// 			callbackCh.Send(fmt.Errorf("received EDSUpdate %v in edsCallback, wanted nil", u))
+// 			callbackCh.Send(fmt.Errorf("received EndpointsUpdate %v in edsCallback, wanted nil", u))
 // 		}
 // 		if err == nil {
 // 			callbackCh.Send(errors.New("received nil error in edsCallback"))

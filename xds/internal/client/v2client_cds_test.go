@@ -19,8 +19,6 @@
 package client
 
 import (
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -29,8 +27,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
 const (
@@ -41,11 +37,11 @@ const (
 )
 
 func (s) TestValidateCluster(t *testing.T) {
-	emptyUpdate := CDSUpdate{ServiceName: "", EnableLRS: false}
+	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
 	tests := []struct {
 		name       string
 		cluster    *xdspb.Cluster
-		wantUpdate CDSUpdate
+		wantUpdate ClusterUpdate
 		wantErr    bool
 	}{
 		{
@@ -128,12 +124,12 @@ func (s) TestValidateCluster(t *testing.T) {
 				},
 				LbPolicy: xdspb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: CDSUpdate{ServiceName: serviceName1, EnableLRS: false},
+			wantUpdate: ClusterUpdate{ServiceName: serviceName1, EnableLRS: false},
 		},
 		{
 			name:       "happiest-case",
 			cluster:    goodCluster1,
-			wantUpdate: CDSUpdate{ServiceName: serviceName1, EnableLRS: true},
+			wantUpdate: ClusterUpdate{ServiceName: serviceName1, EnableLRS: true},
 		},
 	}
 
@@ -154,17 +150,11 @@ func (s) TestValidateCluster(t *testing.T) {
 // and creates a v2Client using it. Then, it registers a CDS watcher and tests
 // different CDS responses.
 func (s) TestCDSHandleResponse(t *testing.T) {
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-
 	tests := []struct {
 		name          string
 		cdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    *CDSUpdate
+		wantUpdate    *ClusterUpdate
 		wantUpdateErr bool
 	}{
 		// Badly marshaled CDS response.
@@ -188,37 +178,36 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:          "no-cluster",
 			cdsResponse:   &xdspb.DiscoveryResponse{},
 			wantErr:       false,
-			wantUpdate:    &CDSUpdate{},
-			wantUpdateErr: true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
 		},
 		// Response contains one good cluster we are not interested in.
 		{
 			name:          "one-uninteresting-cluster",
 			cdsResponse:   goodCDSResponse2,
 			wantErr:       false,
-			wantUpdate:    &CDSUpdate{},
-			wantUpdateErr: true,
+			wantUpdate:    nil,
+			wantUpdateErr: false,
 		},
 		// Response contains one cluster and it is good.
 		{
 			name:          "one-good-cluster",
 			cdsResponse:   goodCDSResponse1,
 			wantErr:       false,
-			wantUpdate:    &CDSUpdate{ServiceName: serviceName1, EnableLRS: true},
+			wantUpdate:    &ClusterUpdate{ServiceName: serviceName1, EnableLRS: true},
 			wantUpdateErr: false,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
+				typeURL:      cdsURL,
+				resourceName: clusterName1,
+
 				responseToHandle: test.cdsResponse,
 				wantHandleErr:    test.wantErr,
 				wantUpdate:       test.wantUpdate,
 				wantUpdateErr:    test.wantUpdateErr,
-
-				cdsWatch:      v2c.watchCDS,
-				watchReqChan:  fakeServer.XDSRequestChan,
-				handleXDSResp: v2c.handleCDSResponse,
 			})
 		})
 	}
@@ -230,64 +219,18 @@ func (s) TestCDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	v2c := newV2Client(&testUpdateReceiver{
+		f: func(string, map[string]interface{}) {},
+	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
-	if v2c.handleCDSResponse(goodCDSResponse1) == nil {
+	if v2c.handleCDSResponse(badResourceTypeInLDSResponse) == nil {
 		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
-}
 
-// cdsTestOp contains all data related to one particular test operation. Not
-// all fields make sense for all tests.
-type cdsTestOp struct {
-	// target is the resource name to watch for.
-	target string
-	// responseToSend is the xDS response sent to the client
-	responseToSend *fakeserver.Response
-	// wantOpErr specfies whether the main operation should return an error.
-	wantOpErr bool
-	// wantCDSCache is the expected rdsCache at the end of an operation.
-	wantCDSCache map[string]CDSUpdate
-	// wantWatchCallback specifies if the watch callback should be invoked.
-	wantWatchCallback bool
-}
-
-// TestCDSWatchExpiryTimer tests the case where the client does not receive an
-// CDS response for the request that it sends out. We want the watch callback
-// to be invoked with an error once the watchExpiryTimer fires.
-func (s) TestCDSWatchExpiryTimer(t *testing.T) {
-	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
-	defaultWatchExpiryTimeout = 500 * time.Millisecond
-	defer func() {
-		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
-	}()
-
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
-	defer cleanup()
-
-	v2c := newV2Client(cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
-	defer v2c.close()
-	t.Log("Started xds v2Client...")
-
-	callbackCh := testutils.NewChannel()
-	v2c.watchCDS(clusterName1, func(u CDSUpdate, err error) {
-		t.Logf("Received callback with CDSUpdate {%+v} and error {%v}", u, err)
-		if u.ServiceName != "" {
-			callbackCh.Send(fmt.Errorf("received serviceName %v in cdsCallback, wanted empty string", u.ServiceName))
-		}
-		if err == nil {
-			callbackCh.Send(errors.New("received nil error in cdsCallback"))
-		}
-		callbackCh.Send(nil)
-	})
-
-	// Wait till the request makes it to the fakeServer. This ensures that
-	// the watch request has been processed by the v2Client.
-	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
-		t.Fatalf("Timeout expired when expecting an CDS request")
+	if v2c.handleCDSResponse(goodCDSResponse1) != nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
-	waitForNilErr(t, callbackCh)
 }
 
 var (

@@ -27,7 +27,7 @@ var (
 
 // TestEndpointsWatch covers the case where an update is received after a watch().
 func TestEndpointsWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -86,7 +86,7 @@ func TestEndpointsWatch(t *testing.T) {
 // TestEndpointsTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
 func TestEndpointsTwoWatchSameResourceName(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -153,7 +153,7 @@ func TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 // TestEndpointsThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
 func TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -214,7 +214,7 @@ func TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 // TestEndpointsWatchAfterCache covers the case where watch is called after the update
 // is in cache.
 func TestEndpointsWatchAfterCache(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))

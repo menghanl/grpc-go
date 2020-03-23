@@ -8,7 +8,7 @@ import (
 
 // TestServiceWatch covers the case where an update is received after a watch.
 func TestServiceWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -49,7 +49,7 @@ func TestServiceWatch(t *testing.T) {
 // response, the second LDS response trigger an new RDS watch, and an update of
 // the old RDS watch doesn't trigger update to service callback.
 func TestServiceWatchLDSUpdate(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -121,7 +121,7 @@ func TestServiceWatchLDSUpdate(t *testing.T) {
 // error (because only one is allowed). But the first watch still receives
 // updates.
 func TestServiceWatchSecond(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))

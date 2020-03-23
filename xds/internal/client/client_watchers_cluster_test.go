@@ -8,7 +8,7 @@ import (
 
 // TestClusterWatch covers the case where an update is received after a watch().
 func TestClusterWatch(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -67,7 +67,7 @@ func TestClusterWatch(t *testing.T) {
 // TestClusterTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
 func TestClusterTwoWatchSameResourceName(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -134,7 +134,7 @@ func TestClusterTwoWatchSameResourceName(t *testing.T) {
 // TestClusterThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
 func TestClusterThreeWatchDifferentResourceName(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
@@ -195,7 +195,7 @@ func TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 // TestClusterWatchAfterCache covers the case where watch is called after the update
 // is in cache.
 func TestClusterWatchAfterCache(t *testing.T) {
-	v2ClientCh, cleanup := overrideNewV2Client()
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
 	c, err := New(clientOpts(testXDSServer))
