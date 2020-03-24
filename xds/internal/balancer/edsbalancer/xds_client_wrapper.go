@@ -184,6 +184,9 @@ func (c *xdsclientWrapper) startEndpointsWatch(nameToWatch string) {
 	}
 
 	c.edsServiceName = nameToWatch
+	if c.cancelEndpointsWatch != nil {
+		c.cancelEndpointsWatch()
+	}
 	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
 		if err != nil {
 			// TODO: this should trigger a call to `c.loseContact`, when the

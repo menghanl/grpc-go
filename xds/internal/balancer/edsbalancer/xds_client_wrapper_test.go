@@ -21,6 +21,7 @@ package edsbalancer
 import (
 	"errors"
 	"testing"
+	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -109,9 +110,25 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 				EDSServiceName: test.edsServiceName,
 			}, nil)
 
-			req, err := fakeServer.XDSRequestChan.Receive()
-			if err != nil {
-				t.Fatalf("EDS RPC failed with err: %v", err)
+			var (
+				req interface{}
+				err error
+			)
+			for {
+				// Each new watch will first cancel the previous watch, and then
+				// start a new watch. The cancel will trigger a request as well.
+				// This loop keeps receiving until error, and keeps the last
+				// request.
+				r, e := fakeServer.XDSRequestChan.TimedReceive(time.Millisecond * 100)
+				if e != nil {
+					t.Logf("EDS RPC failed with err: %v", err)
+					err = e
+					break
+				}
+				req = r
+			}
+			if req == nil {
+				t.Fatalf("Expected xDS request, but got error: %v", err)
 			}
 			edsReq := req.(*fakeserver.Request)
 			if edsReq.Err != nil {
