@@ -20,7 +20,6 @@
 package grpctest
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -48,9 +47,7 @@ type Tester struct{}
 
 // Setup updates the tlogger.
 func (Tester) Setup(t *testing.T) {
-	fmt.Println("updating tlogger to ", t.Name())
 	TLogger.Update(t)
-	fmt.Println("updated tlogger to ", t.Name())
 }
 
 // Teardown performs a leak check.
