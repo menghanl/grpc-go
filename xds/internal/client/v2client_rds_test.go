@@ -265,7 +265,7 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	}
 }
 
-func TestMatchTypeForDomain(t *testing.T) {
+func (s) TestMatchTypeForDomain(t *testing.T) {
 	tests := []struct {
 		d    string
 		want domainMatchType
@@ -284,7 +284,7 @@ func TestMatchTypeForDomain(t *testing.T) {
 	}
 }
 
-func TestMatch(t *testing.T) {
+func (s) TestMatch(t *testing.T) {
 	tests := []struct {
 		name        string
 		domain      string
@@ -311,7 +311,7 @@ func TestMatch(t *testing.T) {
 	}
 }
 
-func TestFindBestMatchingVirtualHost(t *testing.T) {
+func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	var (
 		oneExactMatch = &routepb.VirtualHost{
 			Name:    "one-exact-match",

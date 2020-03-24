@@ -100,7 +100,7 @@ func clientOpts(balancerName string) Options {
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.
-func TestWatchCallAnotherWatch(t *testing.T) {
+func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 

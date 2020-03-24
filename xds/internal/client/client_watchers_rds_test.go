@@ -25,7 +25,7 @@ import (
 )
 
 // TestRDSWatch covers the case where an update is received after a watch().
-func TestRDSWatch(t *testing.T) {
+func (s) TestRDSWatch(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
@@ -84,7 +84,7 @@ func TestRDSWatch(t *testing.T) {
 
 // TestRDSTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
-func TestRDSTwoWatchSameResourceName(t *testing.T) {
+func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
@@ -151,7 +151,7 @@ func TestRDSTwoWatchSameResourceName(t *testing.T) {
 
 // TestRDSThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
-func TestRDSThreeWatchDifferentResourceName(t *testing.T) {
+func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
@@ -212,7 +212,7 @@ func TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 
 // TestRDSWatchAfterCache covers the case where watch is called after the update
 // is in cache.
-func TestRDSWatchAfterCache(t *testing.T) {
+func (s) TestRDSWatchAfterCache(t *testing.T) {
 	v2ClientCh, cleanup := overrideNewXDSV2Client()
 	defer cleanup()
 
