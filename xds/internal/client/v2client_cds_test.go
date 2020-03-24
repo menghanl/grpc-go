@@ -30,8 +30,6 @@ import (
 )
 
 const (
-	clusterName1 = "foo-cluster"
-	clusterName2 = "bar-cluster"
 	serviceName1 = "foo-service"
 	serviceName2 = "bar-service"
 )
@@ -202,7 +200,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
 				typeURL:      cdsURL,
-				resourceName: clusterName1,
+				resourceName: goodClusterName1,
 
 				responseToHandle: test.cdsResponse,
 				wantHandleErr:    test.wantErr,
@@ -244,7 +242,7 @@ var (
 		TypeUrl: cdsURL,
 	}
 	goodCluster1 = &xdspb.Cluster{
-		Name:                 clusterName1,
+		Name:                 goodClusterName1,
 		ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
 		EdsClusterConfig: &xdspb.Cluster_EdsClusterConfig{
 			EdsConfig: &corepb.ConfigSource{
@@ -263,7 +261,7 @@ var (
 	}
 	marshaledCluster1, _ = proto.Marshal(goodCluster1)
 	goodCluster2         = &xdspb.Cluster{
-		Name:                 clusterName2,
+		Name:                 goodClusterName2,
 		ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
 		EdsClusterConfig: &xdspb.Cluster_EdsClusterConfig{
 			EdsConfig: &corepb.ConfigSource{

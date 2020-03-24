@@ -277,7 +277,7 @@ type ackAction struct {
 func (v2c *v2Client) processAckInfo(t *ackAction) (target []string, typeURL, version, nonce string, send bool) {
 	v2c.mu.Lock()
 	defer v2c.mu.Unlock()
-	s, ok := v2c.watchMap[typeURL]
+	s, ok := v2c.watchMap[t.typeURL]
 	if !ok || s.len() == 0 {
 		// We don't send the request ack if there's no active watch (this can be
 		// either the server sends responses before any request, or the watch is
