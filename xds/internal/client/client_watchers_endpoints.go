@@ -71,7 +71,7 @@ type EndpointsUpdate struct {
 	Localities []Locality
 }
 
-type edsCallbackFunc func(EndpointsUpdate, error)
+type edsCallbackFunc = func(EndpointsUpdate, error)
 
 // WatchEndpoints uses EDS to discover endpoints in the provided clusterName.
 //

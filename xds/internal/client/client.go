@@ -56,7 +56,7 @@ type xdsv2Client interface {
 }
 
 var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
-	return nil
+	return newV2Client(parent, cc, nodeProto, backoff, logger)
 }
 
 // Client is a full fledged gRPC client which queries a set of discovery APIs

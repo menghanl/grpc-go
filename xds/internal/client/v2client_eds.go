@@ -110,12 +110,12 @@ func ParseEDSRespProto(m *xdspb.ClusterLoadAssignment) (EndpointsUpdate, error) 
 //
 // TODO: delete this. The EDS balancer tests should build an EndpointsUpdate directly,
 //  instead of building and parsing a proto message.
-func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) *EndpointsUpdate {
+func ParseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) EndpointsUpdate {
 	u, err := ParseEDSRespProto(m)
 	if err != nil {
 		panic(err.Error())
 	}
-	return &u
+	return u
 }
 
 func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {

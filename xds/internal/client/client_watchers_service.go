@@ -28,7 +28,7 @@ type ServiceUpdate struct {
 	Cluster string
 }
 
-type serviceCallbackFunc func(ServiceUpdate, error)
+type serviceCallbackFunc = func(ServiceUpdate, error)
 
 // WatchService uses LDS and RDS to discover information about the provided
 // serviceName.

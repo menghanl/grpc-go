@@ -33,7 +33,7 @@ type ClusterUpdate struct {
 	EnableLRS bool
 }
 
-type cdsCallbackFunc func(ClusterUpdate, error)
+type cdsCallbackFunc = func(ClusterUpdate, error)
 
 // WatchCluster uses CDS to discover information about the provided
 // clusterName.

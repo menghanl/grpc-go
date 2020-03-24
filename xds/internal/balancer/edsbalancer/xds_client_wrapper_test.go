@@ -142,7 +142,7 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
-	newEDS := func(update *xdsclient.EDSUpdate) error {
+	newEDS := func(update xdsclient.EndpointsUpdate) error {
 		edsRespChan.Send(update)
 		return nil
 	}
@@ -159,7 +159,7 @@ func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	if gotCluster != testEDSClusterName {
 		t.Fatalf("xdsClient.WatchEndpoints() called with cluster: %v, want %v", gotCluster, testEDSClusterName)
 	}
-	xdsC.InvokeWatchEDSCallback(nil, errors.New("EDS watch callback error"))
+	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, errors.New("EDS watch callback error"))
 
 	// The callback is called with an error, expect no update from edsRespChan.
 	//
