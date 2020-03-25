@@ -13,7 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package client
@@ -75,6 +74,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	defer v2c.close()
 
+	// RDS needs an existin LDS watch for the hostname.
 	if test.typeURL == rdsURL {
 		doLDS(t, v2c, fakeServer)
 	}
