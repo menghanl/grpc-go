@@ -19,9 +19,13 @@
 package client
 
 import (
+	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 )
 
 // TestServiceWatch covers the case where an update is received after a watch.
@@ -211,5 +215,142 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 	}
 	if e, err := serviceErrCh2.Receive(); err == nil {
 		t.Errorf("unexpected serviceError: %v, %v, want channel recv timeout", e, err)
+	}
+}
+
+// TestServiceWatchWithNoResponseFromServer tests the case where the xDS server
+// does not respond to the requests being sent out as part of registering a
+// service update watcher. The underlying v2Client will timeout and will send us
+// an error.
+func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
+	fakeServer, cleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	defer cleanup()
+
+	xdsClient, err := New(clientOpts(fakeServer.Address))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	defer xdsClient.Close()
+	t.Log("Created an xdsClient...")
+
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	callbackCh := testutils.NewChannel()
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+		if su.Cluster != "" {
+			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster))
+			return
+		}
+		if err == nil {
+			callbackCh.Send(errors.New("xdsClient.WatchService returned error non-nil error"))
+			return
+		}
+		callbackCh.Send(nil)
+	})
+	defer cancelWatch()
+	t.Log("Registered a watcher for service updates...")
+
+	// Wait for one request from the client, but send no reponses.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
+	waitForNilErr(t, callbackCh)
+}
+
+// TestServiceWatchEmptyRDS tests the case where the underlying
+// v2Client receives an empty RDS response.
+func (s) TestServiceWatchEmptyRDS(t *testing.T) {
+	fakeServer, cleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	defer cleanup()
+
+	xdsClient, err := New(clientOpts(fakeServer.Address))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	defer xdsClient.Close()
+	t.Log("Created an xdsClient...")
+
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	callbackCh := testutils.NewChannel()
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+		if su.Cluster != "" {
+			callbackCh.Send(fmt.Errorf("got clusterName: %+v, want empty clusterName", su.Cluster))
+			return
+		}
+		if err == nil {
+			callbackCh.Send(errors.New("xdsClient.WatchService returned error non-nil error"))
+			return
+		}
+		callbackCh.Send(nil)
+	})
+	defer cancelWatch()
+	t.Log("Registered a watcher for service updates...")
+
+	// Make the fakeServer send LDS response.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
+
+	// Make the fakeServer send an empty RDS response.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an RDS request")
+	}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: noVirtualHostsInRDSResponse}
+	waitForNilErr(t, callbackCh)
+}
+
+// TestServiceWatchWithClientClose tests the case where xDS responses are
+// received after the client is closed, and we make sure that the registered
+// watcher callback is not invoked.
+func (s) TestServiceWatchWithClientClose(t *testing.T) {
+	fakeServer, cleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	defer cleanup()
+
+	xdsClient, err := New(clientOpts(fakeServer.Address))
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	defer xdsClient.Close()
+	t.Log("Created an xdsClient...")
+
+	callbackCh := testutils.NewChannel()
+	cancelWatch := xdsClient.WatchService(goodLDSTarget1, func(su ServiceUpdate, err error) {
+		callbackCh.Send(errors.New("watcher callback invoked after client close"))
+	})
+	defer cancelWatch()
+	t.Log("Registered a watcher for service updates...")
+
+	// Make the fakeServer send LDS response.
+	if _, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+		t.Fatalf("Timeout expired when expecting an LDS request")
+	}
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
+
+	xdsClient.Close()
+	t.Log("Closing the xdsClient...")
+
+	// Push an RDS response from the fakeserver
+	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodRDSResponse1}
+	if cbErr, err := callbackCh.Receive(); err != testutils.ErrRecvTimeout {
+		t.Fatal(cbErr)
 	}
 }

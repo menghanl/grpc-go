@@ -22,12 +22,14 @@ import (
 	"testing"
 	"time"
 
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
+
+	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 )
 
 type s struct {
@@ -58,6 +60,69 @@ func clientOpts(balancerName string) Options {
 		// // WithTimeout is deprecated. But we are OK to call it here from the
 		// // test, so we clearly know that the dial failed.
 		// DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second), grpc.WithBlock()},
+	}
+}
+
+func (s) TestNew(t *testing.T) {
+	fakeServer, cleanup, err := fakeserver.StartServer()
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	defer cleanup()
+
+	tests := []struct {
+		name    string
+		opts    Options
+		wantErr bool
+	}{
+		{name: "empty-opts", opts: Options{}, wantErr: true},
+		{
+			name: "empty-balancer-name",
+			opts: Options{
+				Config: bootstrap.Config{
+					Creds:     grpc.WithInsecure(),
+					NodeProto: &corepb.Node{},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty-dial-creds",
+			opts: Options{
+				Config: bootstrap.Config{
+					BalancerName: "dummy",
+					NodeProto:    &corepb.Node{},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty-node-proto",
+			opts: Options{
+				Config: bootstrap.Config{
+					BalancerName: "dummy",
+					Creds:        grpc.WithInsecure(),
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name:    "happy-case",
+			opts:    clientOpts(fakeServer.Address),
+			wantErr: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			c, err := New(test.opts)
+			if err == nil {
+				defer c.Close()
+			}
+			if (err != nil) != test.wantErr {
+				t.Fatalf("New(%+v) = %v, wantErr: %v", test.opts, err, test.wantErr)
+			}
+		})
 	}
 }
 

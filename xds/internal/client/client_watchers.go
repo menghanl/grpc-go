@@ -33,7 +33,7 @@ const (
 	edsURL = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 )
 
-// watchInfo holds all the information about a watch call.
+// watchInfo holds all the information from a watch() call.
 type watchInfo struct {
 	typeURL string
 	target  string
@@ -46,9 +46,6 @@ type watchInfo struct {
 }
 
 func (c *Client) watch(wi *watchInfo) (cancel func()) {
-	// If this is a new watcher, will ask lower level to send a new request with
-	// the resource name. If this type+name is already being watched, will do
-	// nothing.
 	var watchers map[string]*watchInfoSet
 	switch wi.typeURL {
 	case ldsURL:
@@ -64,14 +61,20 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	resourceName := wi.target
 	s, ok := watchers[wi.target]
 	if !ok {
+		// If this is a new watcher, will ask lower level to send a new request with
+		// the resource name.
+		//
+		// If this type+name is already being watched, will not notify the
+		// underlying xdsv2Client.
 		s = newWatchInfoSet()
 		watchers[resourceName] = s
 		c.v2c.addWatch(wi.typeURL, resourceName)
 	}
+	// No matter what, add the new watcher to the set, so it's callback will be
+	// call for new responses.
 	s.add(wi)
 
-	// If this clusterName is in cache, it will call the callback with the
-	// value.
+	// If the resource is in cache, call the callback with the value.
 	switch wi.typeURL {
 	case ldsURL:
 		if v, ok := c.ldsCache[resourceName]; ok {
@@ -92,13 +95,16 @@ func (c *Client) watch(wi *watchInfo) (cancel func()) {
 	}
 
 	return func() {
-		// Remove this watcher from cdsWatchers.
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if s := watchers[resourceName]; s != nil {
 			wi.expiryTimer.Stop()
+			// Remove this watcher, so it's callback will not be called in the
+			// future.
 			s.remove(wi)
 			if s.len() == 0 {
+				// If this was the last watcher, also tell xdsv2Client to stop
+				// watching this resource.
 				delete(watchers, resourceName)
 				c.v2c.removeWatch(wi.typeURL, resourceName)
 				// TODO: remove item from cache.
