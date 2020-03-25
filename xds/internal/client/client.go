@@ -48,6 +48,7 @@ type Options struct {
 	TargetName string
 }
 
+// Interface to be overridden in tests.
 type xdsv2Client interface {
 	addWatch(resourceType string, resourceName string)
 	removeWatch(resourceType string, resourceName string)
@@ -55,6 +56,7 @@ type xdsv2Client interface {
 	close()
 }
 
+// Function to be overridden in tests.
 var newXDSV2Client = func(parent *Client, cc *grpc.ClientConn, nodeProto *corepb.Node, backoff func(int) time.Duration, logger *grpclog.PrefixLogger) xdsv2Client {
 	return newV2Client(parent, cc, nodeProto, backoff, logger)
 }
@@ -139,8 +141,8 @@ func New(opts Options) (*Client, error) {
 // run is a goroutine for all the callbacks.
 //
 // Callback can be called in watch(), if an item is found in cache. Without this
-// goroutine, the callback will be called inline, might cause a deadlock in
-// user's code. Callbacks also cannot be simple `go callback()` because the
+// goroutine, the callback will be called inline, which might cause a deadlock
+// in user's code. Callbacks also cannot be simple `go callback()` because the
 // order matters.
 func (c *Client) run() {
 	for {

@@ -25,9 +25,18 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 const (
 	testXDSServer   = "xds-server"
@@ -38,6 +47,19 @@ const (
 	testCDSName = "test-cds"
 	testEDSName = "test-eds"
 )
+
+func clientOpts(balancerName string) Options {
+	return Options{
+		Config: bootstrap.Config{
+			BalancerName: balancerName,
+			Creds:        grpc.WithInsecure(),
+			NodeProto:    &corepb.Node{},
+		},
+		// // WithTimeout is deprecated. But we are OK to call it here from the
+		// // test, so we clearly know that the dial failed.
+		// DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second), grpc.WithBlock()},
+	}
+}
 
 type testXDSV2Client struct {
 	r updateReceiver
@@ -84,19 +106,6 @@ func (c *testXDSV2Client) removeWatch(resourceType string, resourceName string) 
 }
 
 func (c *testXDSV2Client) close() {}
-
-func clientOpts(balancerName string) Options {
-	return Options{
-		Config: bootstrap.Config{
-			BalancerName: balancerName,
-			Creds:        grpc.WithInsecure(),
-			NodeProto:    &corepb.Node{},
-		},
-		// // WithTimeout is deprecated. But we are OK to call it here from the
-		// // test, so we clearly know that the dial failed.
-		// DialOpts: []grpc.DialOption{grpc.WithTimeout(5 * time.Second), grpc.WithBlock()},
-	}
-}
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.

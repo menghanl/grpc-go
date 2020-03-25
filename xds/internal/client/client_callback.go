@@ -40,7 +40,7 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	// The callback must be called without c.mu. Otherwise if the callback calls
 	// another watch() inline, it will cause a deadlock. This leaves a small
 	// window that a watcher's callback could be called after the watcher is
-	// canceled, and the user needs to take care of it
+	// canceled, and the user needs to take care of it.
 	var ccb func()
 	switch wiu.wi.typeURL {
 	case ldsURL:
@@ -67,6 +67,11 @@ func (c *Client) callCallback(wiu *watcherInfoWithUpdate) {
 	}
 }
 
+// newUpdate is called by the underlying xdsv2Client when it receives an xDS
+// response.
+//
+// A response can contain multiple resources. They will be parsed and put in a
+// map from resource name to the resource content.
 func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -89,7 +94,10 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 			})
 		}
 	}
-	// TODO: for LDS and CDS, handle removing resources.
+	// TODO: for LDS and CDS, handle removing resources, which means if a
+	// resource exists in the previous update, but not in the new update. This
+	// needs the balancers and resolvers to handle errors correctly.
+	//
 	// var emptyUpdate interface{}
 	// switch typeURL {
 	// case ldsURL:
@@ -101,7 +109,7 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	// 	for name, s := range watchers {
 	// 		if _, ok := d[name]; !ok {
 	// 			s.forEach(func(wi *watchInfo) {
-	// 				c.scheduleCallback(wi, emptyUpdate, fmt.Errorf("resource removed"))
+	// 				c.scheduleCallback(wi, emptyUpdate, errorf(errTypeResourceRemoved, "resource removed"))
 	// 			})
 	// 		}
 	// 	}
@@ -141,6 +149,6 @@ func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	for name, update := range d {
 		f(name, update)
 	}
-	// TODO: remove item from cache? LDS and CDS, remove if not in d, and also
-	// remove corresponding RDS/EDS data?
+	// TODO: remove item from cache for LDS and CDS. For RDS and EDS, remove if
+	// the corresponding LDS/CDS data was removed?
 }
