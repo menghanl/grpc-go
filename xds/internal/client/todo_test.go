@@ -18,6 +18,55 @@
 
 package client
 
+// // Test/*V2*/ClientCancelWatch verifies that the registered watch callback is not
+// // invoked if a response is received after the watcher is cancelled.
+// func (s) TestV2ClientCancelWatch(t *testing.T) {
+// 	fakeServer, cc, cleanup := startServerAndGetCC(t)
+// 	defer cleanup()
+//
+// 	callbackCh := testutils.NewChannel()
+// 	v2c := newV2Client(&testUpdateReceiver{
+// 		f: func(typeURL string, d map[string]interface{}) {
+// 			if typeURL == ldsURL {
+// 				if u, ok := d[goodLDSTarget1]; ok {
+// 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
+// 					callbackCh.Send(struct{}{})
+// 				}
+// 			}
+// 		},
+// 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+// 	defer v2c.close()
+// 	t.Log("Started xds v2Client...")
+//
+// 	v2c.addWatch(ldsURL, goodLDSTarget1)
+// 	if ttt, err := fakeServer.XDSRequestChan.Receive(); err != nil {
+// 		t.Fatalf("Timeout expired when expecting an LDS request")
+// 	} else {
+// 		fmt.Println(ttt)
+// 	}
+// 	t.Log("FakeServer received request...")
+//
+// 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
+// 	t.Log("Good LDS response pushed to fakeServer...")
+//
+// 	if _, err := callbackCh.Receive(); err != nil {
+// 		t.Fatal("Timeout when expecting LDS update")
+// 	}
+//
+// 	v2c.removeWatch(ldsURL, goodLDSTarget1)
+// 	for i := 0; i < 2; i++ {
+// 		ttt, eee := fakeServer.XDSRequestChan.Receive()
+// 		fmt.Println(i, ttt, eee)
+// 	}
+//
+// 	fakeServer.XDSResponseChan <- &fakeserver.Response{Resp: goodLDSResponse1}
+// 	t.Log("Another good LDS response pushed to fakeServer...")
+//
+// 	if _, err := callbackCh.Receive(); err != testutils.ErrRecvTimeout {
+// 		t.Fatalf("Watch callback invoked after the watcher was cancelled")
+// 	}
+// }
+
 // // TestLDSWatchExpiryTimer tests the case where the client does not receive an
 // // LDS response for the request that it sends out. We want the watch callback
 // // to be invoked with an error once the watchExpiryTimer fires.
