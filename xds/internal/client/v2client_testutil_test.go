@@ -160,18 +160,18 @@ func startServerAndGetCC(t *testing.T) (*fakeserver.Server, *grpc.ClientConn, fu
 	}
 }
 
-// waitForNilErr waits for a nil error value to be received on the
-// provided channel.
-func waitForNilErr(t *testing.T, ch *testutils.Channel) {
-	t.Helper()
-
-	val, err := ch.Receive()
-	if err == testutils.ErrRecvTimeout {
-		t.Fatalf("Timeout expired when expecting update")
-	}
-	if val != nil {
-		if cbErr := val.(error); cbErr != nil {
-			t.Fatal(cbErr)
-		}
-	}
-}
+// // waitForNilErr waits for a nil error value to be received on the
+// // provided channel.
+// func waitForNilErr(t *testing.T, ch *testutils.Channel) {
+// 	t.Helper()
+//
+// 	val, err := ch.Receive()
+// 	if err == testutils.ErrRecvTimeout {
+// 		t.Fatalf("Timeout expired when expecting update")
+// 	}
+// 	if val != nil {
+// 		if cbErr := val.(error); cbErr != nil {
+// 			t.Fatal(cbErr)
+// 		}
+// 	}
+// }

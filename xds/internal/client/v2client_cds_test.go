@@ -292,17 +292,17 @@ var (
 		},
 		TypeUrl: cdsURL,
 	}
-	cdsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: cdsURL,
-				Value:   marshaledCluster1,
-			},
-			{
-				TypeUrl: cdsURL,
-				Value:   marshaledCluster2,
-			},
-		},
-		TypeUrl: cdsURL,
-	}
+	// cdsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
+	// 	Resources: []*anypb.Any{
+	// 		{
+	// 			TypeUrl: cdsURL,
+	// 			Value:   marshaledCluster1,
+	// 		},
+	// 		{
+	// 			TypeUrl: cdsURL,
+	// 			Value:   marshaledCluster2,
+	// 		},
+	// 	},
+	// 	TypeUrl: cdsURL,
+	// }
 )

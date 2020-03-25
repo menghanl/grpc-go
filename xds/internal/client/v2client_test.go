@@ -336,25 +336,25 @@ var (
 		},
 	}
 	marshaledGoodRouteConfig2, _ = proto.Marshal(goodRouteConfig2)
-	uninterestingRouteConfig     = &xdspb.RouteConfiguration{
-		Name: uninterestingRouteName,
-		VirtualHosts: []*routepb.VirtualHost{
-			{
-				Domains: []string{uninterestingDomain},
-				Routes: []*routepb.Route{
-					{
-						Action: &routepb.Route_Route{
-							Route: &routepb.RouteAction{
-								ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	marshaledUninterestingRouteConfig, _ = proto.Marshal(uninterestingRouteConfig)
-	goodRDSResponse1                     = &xdspb.DiscoveryResponse{
+	// uninterestingRouteConfig     = &xdspb.RouteConfiguration{
+	// 	Name: uninterestingRouteName,
+	// 	VirtualHosts: []*routepb.VirtualHost{
+	// 		{
+	// 			Domains: []string{uninterestingDomain},
+	// 			Routes: []*routepb.Route{
+	// 				{
+	// 					Action: &routepb.Route_Route{
+	// 						Route: &routepb.RouteAction{
+	// 							ClusterSpecifier: &routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
+	// 						},
+	// 					},
+	// 				},
+	// 			},
+	// 		},
+	// 	},
+	// }
+	// marshaledUninterestingRouteConfig, _ = proto.Marshal(uninterestingRouteConfig)
+	goodRDSResponse1 = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			{
 				TypeUrl: rdsURL,
@@ -372,15 +372,15 @@ var (
 		},
 		TypeUrl: rdsURL,
 	}
-	uninterestingRDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: rdsURL,
-				Value:   marshaledUninterestingRouteConfig,
-			},
-		},
-		TypeUrl: rdsURL,
-	}
+	// uninterestingRDSResponse = &xdspb.DiscoveryResponse{
+	// 	Resources: []*anypb.Any{
+	// 		{
+	// 			TypeUrl: rdsURL,
+	// 			Value:   marshaledUninterestingRouteConfig,
+	// 		},
+	// 	},
+	// 	TypeUrl: rdsURL,
+	// }
 )
 
 // // TestV2ClientBackoffAfterRecvError verifies if the v2Client backoffs when it
