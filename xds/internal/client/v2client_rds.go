@@ -45,6 +45,8 @@ func (v2c *v2Client) handleRDSResponse(resp *xdspb.DiscoveryResponse) error {
 			return fmt.Errorf("xds: unexpected resource type: %T in RDS response", resource.Message)
 		}
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v. Picking routes for current watching hostname %v", rc.GetName(), rc, rc, v2c.hostname)
+
+		// Use the hostname (resourceName for LDS) to find the routes.
 		cluster := getClusterFromRouteConfiguration(rc, v2c.hostname)
 		if cluster == "" {
 			return fmt.Errorf("xds: received invalid RouteConfiguration in RDS response: %+v", rc)

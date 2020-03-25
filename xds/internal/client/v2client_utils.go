@@ -44,14 +44,3 @@ func (s *stringSet) toSlice() (ret []string) {
 	}
 	return
 }
-
-// func (s *stringSet) has(i string) bool {
-// 	_, ok := s.m[i]
-// 	return ok
-// }
-//
-// func (s *stringSet) forEach(f func(string)) {
-// 	for v := range s.m {
-// 		f(v)
-// 	}
-// }

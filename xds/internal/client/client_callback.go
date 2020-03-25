@@ -117,6 +117,9 @@ func (c *Client) newUpdate(typeURL string, d map[string]interface{}) {
 	c.syncCache(typeURL, d)
 }
 
+// syncCache adds updates to the cache. Resource is cached only if there's an
+// active watcher for it.
+//
 // Caller must hold c.mu.
 func (c *Client) syncCache(typeURL string, d map[string]interface{}) {
 	var f func(name string, update interface{})

@@ -13,7 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 package client
@@ -133,12 +132,6 @@ func (v2c *v2Client) handleEDSResponse(resp *xdspb.DiscoveryResponse) error {
 			return fmt.Errorf("xds: unexpected resource type: %T in EDS response", resource.Message)
 		}
 		v2c.logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
-
-		// if cla.GetClusterName() != wi.target[0] {
-		// 	// We won't validate the remaining resources. If one of the
-		// 	// uninteresting ones is invalid, we will still ACK the response.
-		// 	continue
-		// }
 
 		u, err := ParseEDSRespProto(cla)
 		if err != nil {

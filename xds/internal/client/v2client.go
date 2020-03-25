@@ -36,6 +36,7 @@ type adsStream adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClien
 
 var _ xdsv2Client = &v2Client{}
 
+// Interface to be overridden in test.
 type updateReceiver interface {
 	newUpdate(typeURL string, d map[string]interface{})
 }
@@ -45,7 +46,7 @@ type updateReceiver interface {
 // are multiplexed.
 //
 // This client's main purpose is to make the RPC, build/parse proto messages,
-// and doing ACK/NACK. It's a naive implementation that sends whatever the upper
+// and do ACK/NACK. It's a naive implementation that sends whatever the upper
 // layer tells it to send. It will call the callback with everything in every
 // response. It doesn't keep cache, or check for duplicates.
 //
@@ -84,10 +85,11 @@ type v2Client struct {
 	versionMap map[string]string
 	// nonceMap contains the nonce from the most recent received response.
 	nonceMap map[string]string
-	// hostname is the LDS resource_name to watch. It's from the dial target of
-	// the parent ClientConn. RDS resource processing needs this to do the host
-	// matching. This field is set to the first LDS resource_name to watch, and
-	// removed when the LDS watch is canceled.
+	// hostname is the LDS resource_name to watch. It is set to the first LDS
+	// resource_name to watch, and removed when the LDS watch is canceled.
+	//
+	// It's from the dial target of the parent ClientConn. RDS resource
+	// processing needs this to do the host matching.
 	hostname string
 }
 
