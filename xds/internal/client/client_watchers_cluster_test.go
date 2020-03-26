@@ -20,6 +20,7 @@ package client
 
 import (
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -265,5 +266,41 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	}
 	if e, err := clusterErrCh.TimedReceive(chanRecvTimeout); err != testutils.ErrRecvTimeout {
 		t.Errorf("unexpected clusterError: %v, %v, want channel recv timeout", e, err)
+	}
+}
+
+// TestClusterWatchExpiryTimer tests the case where the client does not receive
+// an CDS response for the request that it sends out. We want the watch callback
+// to be invoked with an error once the watchExpiryTimer fires.
+func (s) TestClusterWatchExpiryTimer(t *testing.T) {
+	oldWatchExpiryTimeout := defaultWatchExpiryTimeout
+	defaultWatchExpiryTimeout = 500 * time.Millisecond
+	defer func() {
+		defaultWatchExpiryTimeout = oldWatchExpiryTimeout
+	}()
+
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	defer cleanup()
+
+	c, err := New(clientOpts(testXDSServer))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer c.Close()
+
+	<-v2ClientCh
+
+	clusterUpdateCh := testutils.NewChannel()
+	clusterErrCh := testutils.NewChannel()
+	c.WatchCluster(testCDSName, func(u ClusterUpdate, err error) {
+		clusterUpdateCh.Send(u)
+		clusterErrCh.Send(err)
+	})
+
+	if u, err := clusterUpdateCh.TimedReceive(defaultWatchExpiryTimeout * 2); err != nil || (u != ClusterUpdate{}) {
+		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v", u, err)
+	}
+	if e, err := clusterErrCh.TimedReceive(defaultWatchExpiryTimeout * 2); err != nil || e == nil {
+		t.Errorf("unexpected clusterError: %v, error receiving from channel: %v, want error watcher timeout", e, err)
 	}
 }

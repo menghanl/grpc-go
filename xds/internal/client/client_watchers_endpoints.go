@@ -90,7 +90,7 @@ func (c *Client) WatchEndpoints(clusterName string, cb edsCallbackFunc) (cancel 
 	}
 
 	wi.expiryTimer = time.AfterFunc(defaultWatchExpiryTimeout, func() {
-		c.scheduleCallback(wi, nil, fmt.Errorf("xds: EDS target %s not found, watcher timeout", clusterName))
+		c.scheduleCallback(wi, EndpointsUpdate{}, fmt.Errorf("xds: EDS target %s not found, watcher timeout", clusterName))
 	})
 	return c.watch(wi)
 }

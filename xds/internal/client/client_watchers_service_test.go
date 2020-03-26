@@ -220,8 +220,7 @@ func (s) TestServiceWatchSecond(t *testing.T) {
 
 // TestServiceWatchWithNoResponseFromServer tests the case where the xDS server
 // does not respond to the requests being sent out as part of registering a
-// service update watcher. The underlying v2Client will timeout and will send us
-// an error.
+// service update watcher. The callback will get an error.
 func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
@@ -264,8 +263,8 @@ func (s) TestServiceWatchWithNoResponseFromServer(t *testing.T) {
 	waitForNilErr(t, callbackCh)
 }
 
-// TestServiceWatchEmptyRDS tests the case where the underlying
-// v2Client receives an empty RDS response.
+// TestServiceWatchEmptyRDS tests the case where the underlying v2Client
+// receives an empty RDS response. The callback will get an error.
 func (s) TestServiceWatchEmptyRDS(t *testing.T) {
 	fakeServer, cleanup, err := fakeserver.StartServer()
 	if err != nil {
