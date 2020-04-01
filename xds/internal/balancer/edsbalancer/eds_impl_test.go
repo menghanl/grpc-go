@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 var (
@@ -50,7 +51,7 @@ func init() {
 //  - replace backend
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
@@ -67,7 +68,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p1 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testSubConn{})) {
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
 		}
 	}
@@ -84,7 +85,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// Test roundrobin with two subconns.
 	p2 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -94,7 +95,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	scToRemove := <-cc.removeSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -103,7 +104,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p3 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p3.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testSubConn{})) {
+		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
 		}
 	}
@@ -117,7 +118,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	edsb.HandleSubConnStateChange(sc3, connectivity.Connecting)
 	edsb.HandleSubConnStateChange(sc3, connectivity.Ready)
 	scToRemove = <-cc.removeSubConnCh
-	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
+	if !cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove)
 	}
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -126,7 +127,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p4 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p4.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testSubConn{})) {
+		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
 	}
@@ -158,7 +159,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	p6 := <-cc.newPickerCh
 	for i := 0; i < 5; i++ {
 		gotSCSt, _ := p6.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testSubConn{})) {
+		if !cmp.Equal(gotSCSt.SubConn, sc3, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc3)
 		}
 	}
@@ -171,7 +172,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  - address change for the <not-the-first> locality
 //  - update locality weight
 func (s) TestEDS_TwoLocalities(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
@@ -195,7 +196,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// Test roundrobin with two subconns.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -213,7 +214,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// Test roundrobin with three subconns.
 	p2 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc1, sc2, sc3}
-	if err := isRoundRobin(want, subConnFromPicker(p2)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -224,7 +225,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	edsb.HandleEDSResponse(xdsclient.ParseEDSRespProtoForTesting(clab3.Build()))
 
 	scToRemove := <-cc.removeSubConnCh
-	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) {
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
 	}
 	edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -232,7 +233,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// Test pick with two subconns (without the first one).
 	p3 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc2, sc3}
-	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -252,7 +253,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// Locality-1 contains only sc2, locality-2 contains sc3 and sc4. So expect
 	// two sc2's and sc3, sc4.
 	want = []balancer.SubConn{sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, subConnFromPicker(p4)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p4)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -268,7 +269,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// (weight 2 and 1). Locality-1 contains only sc2, locality-2 contains sc3 and
 	// sc4. So expect four sc2's and sc3, sc4.
 	want = []balancer.SubConn{sc2, sc2, sc2, sc2, sc3, sc4}
-	if err := isRoundRobin(want, subConnFromPicker(p5)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p5)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -285,7 +286,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// locality doesn't exist. If this changes in the future, this removeSubConn
 	// behavior will also change.
 	scToRemove2 := <-cc.removeSubConnCh
-	if !cmp.Equal(scToRemove2, sc2, cmp.AllowUnexported(testSubConn{})) {
+	if !cmp.Equal(scToRemove2, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove2)
 	}
 
@@ -294,7 +295,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// Locality-1 will be not be picked, and locality-2 will be picked.
 	// Locality-2 contains sc3 and sc4. So expect sc3, sc4.
 	want = []balancer.SubConn{sc3, sc4}
-	if err := isRoundRobin(want, subConnFromPicker(p6)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p6)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -302,7 +303,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 // The EDS balancer gets EDS resp with unhealthy endpoints. Test that only
 // healthy ones are used.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
@@ -369,7 +370,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Test roundrobin with the subconns.
 	p1 := <-cc.newPickerCh
 	want := readySCs
-	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -431,7 +432,7 @@ func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, e
 // Then switch between round-robin and test-const-balancer after handling first
 // eds response.
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
@@ -474,7 +475,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	// Test roundrobin with two subconns.
 	p1 := <-cc.newPickerCh
 	want := []balancer.SubConn{sc1, sc2}
-	if err := isRoundRobin(want, subConnFromPicker(p1)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -483,8 +484,8 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		scToRemove := <-cc.removeSubConnCh
-		if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testSubConn{})) &&
-			!cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testSubConn{})) {
+		if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
+			!cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
 			t.Fatalf("RemoveSubConn, want (%v or %v), got %v", sc1, sc2, scToRemove)
 		}
 		edsb.HandleSubConnStateChange(scToRemove, connectivity.Shutdown)
@@ -519,7 +520,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	p3 := <-cc.newPickerCh
 	want = []balancer.SubConn{sc3, sc4}
-	if err := isRoundRobin(want, subConnFromPicker(p3)); err != nil {
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -563,7 +564,7 @@ func (*testInlineUpdateBalancer) Close() {
 // (e.g., roundrobin handling empty addresses). There could be deadlock caused
 // by acquiring a locked mutex.
 func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = func(p priorityType, state balancer.State) {
 		// For this test, euqueue needs to happen asynchronously (like in the
@@ -589,7 +590,7 @@ func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
 func (s) TestDropPicker(t *testing.T) {
 	const pickCount = 12
 	var constPicker = &testConstPicker{
-		sc: testSubConns[0],
+		sc: testutils.TestSubConns[0],
 	}
 
 	tests := []struct {
@@ -652,9 +653,9 @@ func (s) TestDropPicker(t *testing.T) {
 }
 
 func (s) TestEDS_LoadReport(t *testing.T) {
-	testLoadStore := newTestLoadStore()
+	testLoadStore := testutils.NewTestLoadStore()
 
-	cc := newTestClientConn(t)
+	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, nil, testLoadStore, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
 
