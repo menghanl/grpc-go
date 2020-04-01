@@ -428,21 +428,21 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 			})
 			wantEnd = append(wantEnd, locality)
 			wantCost = append(wantCost,
-				testutils.TestServerLoad{name: serverLoadCPUName, d: 10},
-				testutils.TestServerLoad{name: serverLoadMemoryName, d: 5},
-				testutils.TestServerLoad{name: "pic", d: 3.14},
-				testutils.TestServerLoad{name: "piu", d: 3.14})
+				testutils.TestServerLoad{Name: serverLoadCPUName, D: 10},
+				testutils.TestServerLoad{Name: serverLoadMemoryName, D: 5},
+				testutils.TestServerLoad{Name: "pic", D: 3.14},
+				testutils.TestServerLoad{Name: "piu", D: 3.14})
 		}
 	}
 
-	if !cmp.Equal(testLoadStore.callsStarted, wantStart) {
-		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
+	if !cmp.Equal(testLoadStore.CallsStarted, wantStart) {
+		t.Fatalf("want started: %v, got: %v", testLoadStore.CallsStarted, wantStart)
 	}
-	if !cmp.Equal(testLoadStore.callsEnded, wantEnd) {
-		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
+	if !cmp.Equal(testLoadStore.CallsEnded, wantEnd) {
+		t.Fatalf("want ended: %v, got: %v", testLoadStore.CallsEnded, wantEnd)
 	}
-	if !cmp.Equal(testLoadStore.callsCost, wantCost, cmp.AllowUnexported(testutils.TestServerLoad{})) {
-		t.Fatalf("want cost: %v, got: %v", testLoadStore.callsCost, wantCost)
+	if !cmp.Equal(testLoadStore.CallsCost, wantCost, cmp.AllowUnexported(testutils.TestServerLoad{})) {
+		t.Fatalf("want cost: %v, got: %v", testLoadStore.CallsCost, wantCost)
 	}
 }
 

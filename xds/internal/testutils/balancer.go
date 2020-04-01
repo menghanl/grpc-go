@@ -121,14 +121,14 @@ func (tcc *TestClientConn) Target() string {
 }
 
 type TestServerLoad struct {
-	name string
-	d    float64
+	Name string
+	D    float64
 }
 
 type TestLoadStore struct {
-	callsStarted []internal.Locality
-	callsEnded   []internal.Locality
-	callsCost    []TestServerLoad
+	CallsStarted []internal.Locality
+	CallsEnded   []internal.Locality
+	CallsCost    []TestServerLoad
 }
 
 func NewTestLoadStore() *TestLoadStore {
@@ -140,15 +140,15 @@ func (*TestLoadStore) CallDropped(category string) {
 }
 
 func (tls *TestLoadStore) CallStarted(l internal.Locality) {
-	tls.callsStarted = append(tls.callsStarted, l)
+	tls.CallsStarted = append(tls.CallsStarted, l)
 }
 
 func (tls *TestLoadStore) CallFinished(l internal.Locality, err error) {
-	tls.callsEnded = append(tls.callsEnded, l)
+	tls.CallsEnded = append(tls.CallsEnded, l)
 }
 
 func (tls *TestLoadStore) CallServerLoad(l internal.Locality, name string, d float64) {
-	tls.callsCost = append(tls.callsCost, TestServerLoad{name: name, d: d})
+	tls.CallsCost = append(tls.CallsCost, TestServerLoad{Name: name, D: d})
 }
 
 func (*TestLoadStore) ReportTo(ctx context.Context, cc *grpc.ClientConn, clusterName string, node *envoy_api_v2_core.Node) {

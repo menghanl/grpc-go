@@ -701,10 +701,10 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 		}
 	}
 
-	if !cmp.Equal(testLoadStore.callsStarted, wantStart) {
-		t.Fatalf("want started: %v, got: %v", testLoadStore.callsStarted, wantStart)
+	if !cmp.Equal(testLoadStore.CallsStarted, wantStart) {
+		t.Fatalf("want started: %v, got: %v", testLoadStore.CallsStarted, wantStart)
 	}
-	if !cmp.Equal(testLoadStore.callsEnded, wantEnd) {
-		t.Fatalf("want ended: %v, got: %v", testLoadStore.callsEnded, wantEnd)
+	if !cmp.Equal(testLoadStore.CallsEnded, wantEnd) {
+		t.Fatalf("want ended: %v, got: %v", testLoadStore.CallsEnded, wantEnd)
 	}
 }
