@@ -571,7 +571,7 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 }
 
 // RandomWRR constructor, to be modified in tests.
-var newRandomWRR = wrr.NewRandom
+var NewRandomWRR = wrr.NewRandom
 
 type pickerGroup struct {
 	length int
@@ -586,7 +586,7 @@ type pickerGroup struct {
 // TODO: (bg) confirm this is the expected behavior: non-ready balancers should
 // be ignored when picking. Only ready balancers are picked.
 func newPickerGroup(readyPickerWithWeights []pickerState) *pickerGroup {
-	w := newRandomWRR()
+	w := NewRandomWRR()
 	for _, ps := range readyPickerWithWeights {
 		w.Add(ps.picker, int64(ps.weight))
 	}

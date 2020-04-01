@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -45,6 +46,7 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testEndpointAddrs = append(testEndpointAddrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
+	balancergroup.NewRandomWRR = testutils.NewTestWRR
 }
 
 // One locality
