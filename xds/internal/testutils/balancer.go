@@ -44,12 +44,12 @@ func (tsc *TestSubConn) String() string {
 type TestClientConn struct {
 	t *testing.T // For logging only.
 
-	NewSubConnAddrsCh *Channel // chan []resolver.Address, the last 10 []Address to create subconn.
-	NewSubConnCh      *Channel // chan balancer.SubConn, the last 10 subconn created.
-	RemoveSubConnCh   *Channel // chan balancer.SubConn, the last 10 subconn removed.
+	NewSubConnAddrsCh chan []resolver.Address // the last 10 []Address to create subconn.
+	NewSubConnCh      chan balancer.SubConn   // the last 10 subconn created.
+	RemoveSubConnCh   chan balancer.SubConn   // the last 10 subconn removed.
 
-	NewPickerCh *Channel // chan balancer.V2Picker, the last picker updated.
-	NewStateCh  *Channel // chan connectivity.State, the last state.
+	NewPickerCh chan balancer.V2Picker  // the last picker updated.
+	NewStateCh  chan connectivity.State // the last state.
 
 	subConnIdx int
 }
@@ -58,27 +58,39 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 	return &TestClientConn{
 		t: t,
 
-		NewSubConnAddrsCh: NewChannelWithSize(10),
-		NewSubConnCh:      NewChannelWithSize(10),
-		RemoveSubConnCh:   NewChannelWithSize(10),
+		NewSubConnAddrsCh: make(chan []resolver.Address, 10),
+		NewSubConnCh:      make(chan balancer.SubConn, 10),
+		RemoveSubConnCh:   make(chan balancer.SubConn, 10),
 
-		NewPickerCh: NewChannelWithSize(1),
-		NewStateCh:  NewChannelWithSize(1),
+		NewPickerCh: make(chan balancer.V2Picker, 1),
+		NewStateCh:  make(chan connectivity.State, 1),
 	}
 }
 
 func (tcc *TestClientConn) NewSubConn(a []resolver.Address, o balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	sc := TestSubConns[tcc.subConnIdx]
 	tcc.subConnIdx++
+
 	tcc.t.Logf("testClientConn: NewSubConn(%v, %+v) => %s", a, o, sc)
-	tcc.NewSubConnAddrsCh.Send(a)
-	tcc.NewSubConnCh.Send(sc)
+	select {
+	case tcc.NewSubConnAddrsCh <- a:
+	default:
+	}
+
+	select {
+	case tcc.NewSubConnCh <- sc:
+	default:
+	}
+
 	return sc, nil
 }
 
 func (tcc *TestClientConn) RemoveSubConn(sc balancer.SubConn) {
 	tcc.t.Logf("testClientCOnn: RemoveSubConn(%p)", sc)
-	tcc.RemoveSubConnCh.Send(sc)
+	select {
+	case tcc.RemoveSubConnCh <- sc:
+	default:
+	}
 }
 
 func (tcc *TestClientConn) UpdateBalancerState(s connectivity.State, p balancer.Picker) {
@@ -87,8 +99,17 @@ func (tcc *TestClientConn) UpdateBalancerState(s connectivity.State, p balancer.
 
 func (tcc *TestClientConn) UpdateState(bs balancer.State) {
 	tcc.t.Logf("testClientConn: UpdateState(%v)", bs)
-	tcc.NewStateCh.Replace(bs.ConnectivityState)
-	tcc.NewPickerCh.Replace(bs.Picker)
+	select {
+	case <-tcc.NewStateCh:
+	default:
+	}
+	tcc.NewStateCh <- bs.ConnectivityState
+
+	select {
+	case <-tcc.NewPickerCh:
+	default:
+	}
+	tcc.NewPickerCh <- bs.Picker
 }
 
 func (tcc *TestClientConn) ResolveNow(resolver.ResolveNowOptions) {
