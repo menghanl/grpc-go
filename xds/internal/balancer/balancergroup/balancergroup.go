@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+// Package balancergroup implements a utility struct to bind multiple balancers
+// into one balancer.
 package balancergroup
 
 import (
@@ -232,6 +234,8 @@ type BalancerGroup struct {
 // TODO: make it a parameter for NewBalancerGroup().
 var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
+// NewBalancerGroup creates a new BalancerGroup. Note that the BalancerGroup
+// needs to be started to work.
 func NewBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
 		cc:        cc,
@@ -245,6 +249,12 @@ func NewBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store, logger *grpcl
 	}
 }
 
+// Start starts the balancer group, including building all the sub-balancers,
+// and send the existing addresses to them.
+//
+// A BalancerGroup can be closed and started later. When a BalancerGroup is
+// closed, it can still receive address updates, which will be applied when
+// restarted.
 func (bg *BalancerGroup) Start() {
 	bg.incomingMu.Lock()
 	bg.incomingStarted = true
@@ -263,7 +273,7 @@ func (bg *BalancerGroup) Start() {
 	bg.outgoingMu.Unlock()
 }
 
-// add adds a balancer built by builder to the group, with given id and weight.
+// Add adds a balancer built by builder to the group, with given id and weight.
 //
 // weight should never be zero.
 func (bg *BalancerGroup) Add(id internal.Locality, weight uint32, builder balancer.Builder) {
@@ -329,7 +339,7 @@ func (bg *BalancerGroup) Add(id internal.Locality, weight uint32, builder balanc
 	bg.outgoingMu.Unlock()
 }
 
-// remove removes the balancer with id from the group.
+// Remove removes the balancer with id from the group.
 //
 // But doesn't close the balancer. The balancer is kept in a cache, and will be
 // closed after timeout. Cleanup work (closing sub-balancer and removing
@@ -393,7 +403,7 @@ func (bg *BalancerGroup) cleanupSubConns(config *subBalancerWithConfig) {
 	bg.incomingMu.Unlock()
 }
 
-// changeWeight changes the weight of the balancer.
+// ChangeWeight changes the weight of the balancer.
 //
 // newWeight should never be zero.
 //
@@ -425,7 +435,8 @@ func (bg *BalancerGroup) ChangeWeight(id internal.Locality, newWeight uint32) {
 
 // Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
 
-// SubConn state change: find the corresponding balancer and then forward.
+// HandleSubConnStateChange handles the state for the subconn. It finds the
+// corresponding balancer and forwards the update.
 func (bg *BalancerGroup) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
 	bg.incomingMu.Lock()
 	config, ok := bg.scToSubBalancer[sc]
@@ -444,7 +455,11 @@ func (bg *BalancerGroup) HandleSubConnStateChange(sc balancer.SubConn, state con
 	bg.outgoingMu.Unlock()
 }
 
-// Address change: forward to balancer.
+// HandleResolvedAddrs handles addresses from resolver. It finds the balancer
+// and forwards the update.
+//
+// TODO: change this to UpdateClientConnState to handle addresses and balancer
+// config.
 func (bg *BalancerGroup) HandleResolvedAddrs(id internal.Locality, addrs []resolver.Address) {
 	bg.outgoingMu.Lock()
 	if config, ok := bg.idToBalancerConfig[id]; ok {
@@ -508,6 +523,8 @@ func (bg *BalancerGroup) updateBalancerState(id internal.Locality, state balance
 	}
 }
 
+// Close closes the balancer. It stops sub-balancers, and removes the subconns.
+// The BalancerGroup can be restarted later.
 func (bg *BalancerGroup) Close() {
 	bg.incomingMu.Lock()
 	if bg.incomingStarted {
@@ -568,7 +585,8 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 	return balancer.State{ConnectivityState: aggregatedState, Picker: newPickerGroup(readyPickerWithWeights)}
 }
 
-// RandomWRR constructor, to be modified in tests.
+// NewRandomWRR is the WRR constructor used to picker sub-pickers from
+// sub-balancers. It's to be modified in tests.
 var NewRandomWRR = wrr.NewRandom
 
 type pickerGroup struct {
