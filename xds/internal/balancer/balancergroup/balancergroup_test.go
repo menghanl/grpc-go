@@ -1,5 +1,6 @@
 /*
- * Copyright 2019 gRPC authors.
+ *
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,9 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package edsbalancer
+package balancergroup
 
 import (
 	"fmt"
@@ -543,9 +545,9 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	bg := newBalancerGroup(cc, nil, nil)
 
-	bg.add(testBalancerIDs[0], 2, &testConstBalancerBuilder{})
+	bg.add(testBalancerIDs[0], 2, &testutils.TestConstBalancerBuilder{})
 	bg.handleResolvedAddrs(testBalancerIDs[0], testBackendAddrs[0:2])
-	bg.add(testBalancerIDs[1], 1, &testConstBalancerBuilder{})
+	bg.add(testBalancerIDs[1], 1, &testutils.TestConstBalancerBuilder{})
 	bg.handleResolvedAddrs(testBalancerIDs[1], testBackendAddrs[2:4])
 
 	bg.start()

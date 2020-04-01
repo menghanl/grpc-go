@@ -3,12 +3,14 @@ package testutils
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	envoy_api_v2_core "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 )
@@ -221,4 +223,92 @@ func (tc *testClosure) next() balancer.SubConn {
 	ret := tc.r[tc.i]
 	tc.i = (tc.i + 1) % len(tc.r)
 	return ret
+}
+
+func init() {
+	balancer.Register(&TestConstBalancerBuilder{})
+}
+
+var errTestConstPicker = fmt.Errorf("const picker error")
+
+type TestConstBalancerBuilder struct{}
+
+func (*TestConstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &testConstBalancer{cc: cc}
+}
+
+func (*TestConstBalancerBuilder) Name() string {
+	return "test-const-balancer"
+}
+
+type testConstBalancer struct {
+	cc balancer.ClientConn
+}
+
+func (tb *testConstBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
+}
+
+func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
+	if len(a) == 0 {
+		return
+	}
+	tb.cc.NewSubConn(a, balancer.NewSubConnOptions{})
+}
+
+func (*testConstBalancer) Close() {
+}
+
+type testConstPicker struct {
+	err error
+	sc  balancer.SubConn
+}
+
+func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	if tcp.err != nil {
+		return balancer.PickResult{}, tcp.err
+	}
+	return balancer.PickResult{SubConn: tcp.sc}, nil
+}
+
+// testWRR is a deterministic WRR implementation.
+//
+// The real implementation does random WRR. testWRR makes the balancer behavior
+// deterministic and easier to test.
+//
+// With {a: 2, b: 3}, the Next() results will be {a, a, b, b, b}.
+type testWRR struct {
+	itemsWithWeight []struct {
+		item   interface{}
+		weight int64
+	}
+	length int
+
+	mu    sync.Mutex
+	idx   int   // The index of the item that will be picked
+	count int64 // The number of times the current item has been picked.
+}
+
+func NewTestWRR() wrr.WRR {
+	return &testWRR{}
+}
+
+func (twrr *testWRR) Add(item interface{}, weight int64) {
+	twrr.itemsWithWeight = append(twrr.itemsWithWeight, struct {
+		item   interface{}
+		weight int64
+	}{item: item, weight: weight})
+	twrr.length++
+}
+
+func (twrr *testWRR) Next() interface{} {
+	twrr.mu.Lock()
+	iww := twrr.itemsWithWeight[twrr.idx]
+	twrr.count++
+	if twrr.count >= iww.weight {
+		twrr.idx = (twrr.idx + 1) % twrr.length
+		twrr.count = 0
+	}
+	twrr.mu.Unlock()
+	return iww.item
 }

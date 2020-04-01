@@ -21,6 +21,8 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
+var newRandomWRR = wrr.NewRandom
+
 type dropper struct {
 	c xdsclient.OverloadDropConfig
 	w wrr.WRR

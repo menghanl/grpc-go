@@ -382,52 +382,6 @@ func (s) TestClose(t *testing.T) {
 	edsb.Close()
 }
 
-func init() {
-	balancer.Register(&testConstBalancerBuilder{})
-}
-
-var errTestConstPicker = fmt.Errorf("const picker error")
-
-type testConstBalancerBuilder struct{}
-
-func (*testConstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &testConstBalancer{cc: cc}
-}
-
-func (*testConstBalancerBuilder) Name() string {
-	return "test-const-balancer"
-}
-
-type testConstBalancer struct {
-	cc balancer.ClientConn
-}
-
-func (tb *testConstBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
-}
-
-func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
-	if len(a) == 0 {
-		return
-	}
-	tb.cc.NewSubConn(a, balancer.NewSubConnOptions{})
-}
-
-func (*testConstBalancer) Close() {
-}
-
-type testConstPicker struct {
-	err error
-	sc  balancer.SubConn
-}
-
-func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	if tcp.err != nil {
-		return balancer.PickResult{}, tcp.err
-	}
-	return balancer.PickResult{SubConn: tcp.sc}, nil
-}
-
 // Create XDS balancer, and update sub-balancer before handling eds responses.
 // Then switch between round-robin and test-const-balancer after handling first
 // eds response.

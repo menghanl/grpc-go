@@ -1,5 +1,6 @@
 /*
- * Copyright 2019 gRPC authors.
+ *
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,62 +13,20 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
 package edsbalancer
 
 import (
-	"sync"
 	"testing"
 
-	"google.golang.org/grpc/internal/wrr"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/testutils"
 )
 
-// testWRR is a deterministic WRR implementation.
-//
-// The real implementation does random WRR. testWRR makes the balancer behavior
-// deterministic and easier to test.
-//
-// With {a: 2, b: 3}, the Next() results will be {a, a, b, b, b}.
-type testWRR struct {
-	itemsWithWeight []struct {
-		item   interface{}
-		weight int64
-	}
-	length int
-
-	mu    sync.Mutex
-	idx   int   // The index of the item that will be picked
-	count int64 // The number of times the current item has been picked.
-}
-
-func newTestWRR() wrr.WRR {
-	return &testWRR{}
-}
-
-func (twrr *testWRR) Add(item interface{}, weight int64) {
-	twrr.itemsWithWeight = append(twrr.itemsWithWeight, struct {
-		item   interface{}
-		weight int64
-	}{item: item, weight: weight})
-	twrr.length++
-}
-
-func (twrr *testWRR) Next() interface{} {
-	twrr.mu.Lock()
-	iww := twrr.itemsWithWeight[twrr.idx]
-	twrr.count++
-	if twrr.count >= iww.weight {
-		twrr.idx = (twrr.idx + 1) % twrr.length
-		twrr.count = 0
-	}
-	twrr.mu.Unlock()
-	return iww.item
-}
-
 func init() {
-	newRandomWRR = newTestWRR
+	newRandomWRR = testutils.NewTestWRR
 }
 
 func (s) TestDropper(t *testing.T) {
