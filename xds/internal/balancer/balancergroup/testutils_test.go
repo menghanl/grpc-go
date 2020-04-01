@@ -16,5 +16,5 @@ func Test(t *testing.T) {
 }
 
 func init() {
-	newRandomWRR = testutils.NewTestWRR
+	NewRandomWRR = testutils.NewTestWRR
 }

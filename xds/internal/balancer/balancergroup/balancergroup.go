@@ -228,11 +228,11 @@ type BalancerGroup struct {
 	idToPickerState map[internal.Locality]*pickerState
 }
 
-// defaultSubBalancerCloseTimeout is defined as a variable instead of const for
+// DefaultSubBalancerCloseTimeout is defined as a variable instead of const for
 // testing.
 //
 // TODO: make it a parameter for NewBalancerGroup().
-var defaultSubBalancerCloseTimeout = 15 * time.Minute
+var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
 func NewBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
@@ -241,7 +241,7 @@ func NewBalancerGroup(cc balancer.ClientConn, loadStore lrs.Store, logger *grpcl
 		loadStore: loadStore,
 
 		idToBalancerConfig: make(map[internal.Locality]*subBalancerWithConfig),
-		balancerCache:      cache.NewTimeoutCache(defaultSubBalancerCloseTimeout),
+		balancerCache:      cache.NewTimeoutCache(DefaultSubBalancerCloseTimeout),
 		scToSubBalancer:    make(map[balancer.SubConn]*subBalancerWithConfig),
 		idToPickerState:    make(map[internal.Locality]*pickerState),
 	}
@@ -571,7 +571,7 @@ func buildPickerAndState(m map[internal.Locality]*pickerState) balancer.State {
 }
 
 // RandomWRR constructor, to be modified in tests.
-var newRandomWRR = wrr.NewRandom
+var NewRandomWRR = wrr.NewRandom
 
 type pickerGroup struct {
 	length int
@@ -586,7 +586,7 @@ type pickerGroup struct {
 // TODO: (bg) confirm this is the expected behavior: non-ready balancers should
 // be ignored when picking. Only ready balancers are picked.
 func newPickerGroup(readyPickerWithWeights []pickerState) *pickerGroup {
-	w := newRandomWRR()
+	w := NewRandomWRR()
 	for _, ps := range readyPickerWithWeights {
 		w.Add(ps.picker, int64(ps.weight))
 	}

@@ -48,7 +48,7 @@ func init() {
 
 	// Disable caching for all tests. It will be re-enabled in caching specific
 	// tests.
-	defaultSubBalancerCloseTimeout = time.Millisecond
+	DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
 func subConnFromPicker(p balancer.V2Picker) func() balancer.SubConn {
@@ -554,9 +554,9 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 }
 
 func replaceDefaultSubBalancerCloseTimeout(n time.Duration) func() {
-	old := defaultSubBalancerCloseTimeout
-	defaultSubBalancerCloseTimeout = n
-	return func() { defaultSubBalancerCloseTimeout = old }
+	old := DefaultSubBalancerCloseTimeout
+	DefaultSubBalancerCloseTimeout = n
+	return func() { DefaultSubBalancerCloseTimeout = old }
 }
 
 // initBalancerGroupForCachingTest creates a balancer group, and initialize it
@@ -706,7 +706,7 @@ func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.
 
 	// The sub-balancer is not re-added withtin timeout. The subconns should be
 	// removed.
-	removeTimeout := time.After(defaultSubBalancerCloseTimeout)
+	removeTimeout := time.After(DefaultSubBalancerCloseTimeout)
 	scToRemove := map[balancer.SubConn]int{
 		addrToSC[testBackendAddrs[2]]: 1,
 		addrToSC[testBackendAddrs[3]]: 1,
