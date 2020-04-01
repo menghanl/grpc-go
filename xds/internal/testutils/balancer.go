@@ -229,7 +229,7 @@ func init() {
 	balancer.Register(&TestConstBalancerBuilder{})
 }
 
-var errTestConstPicker = fmt.Errorf("const picker error")
+var ErrTestConstPicker = fmt.Errorf("const picker error")
 
 type TestConstBalancerBuilder struct{}
 
@@ -246,7 +246,7 @@ type testConstBalancer struct {
 }
 
 func (tb *testConstBalancer) HandleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &testConstPicker{err: errTestConstPicker}})
+	tb.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: &TestConstPicker{Err: ErrTestConstPicker}})
 }
 
 func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
@@ -259,16 +259,16 @@ func (tb *testConstBalancer) HandleResolvedAddrs(a []resolver.Address, err error
 func (*testConstBalancer) Close() {
 }
 
-type testConstPicker struct {
-	err error
-	sc  balancer.SubConn
+type TestConstPicker struct {
+	Err error
+	SC  balancer.SubConn
 }
 
-func (tcp *testConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	if tcp.err != nil {
-		return balancer.PickResult{}, tcp.err
+func (tcp *TestConstPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	if tcp.Err != nil {
+		return balancer.PickResult{}, tcp.Err
 	}
-	return balancer.PickResult{SubConn: tcp.sc}, nil
+	return balancer.PickResult{SubConn: tcp.SC}, nil
 }
 
 // testWRR is a deterministic WRR implementation.

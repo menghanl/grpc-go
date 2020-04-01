@@ -39,6 +39,8 @@ var (
 	testEndpointAddrs []string
 )
 
+const testBackendAddrsCount = 12
+
 func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testEndpointAddrs = append(testEndpointAddrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
@@ -407,8 +409,8 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	p0 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		_, err := p0.Pick(balancer.PickInfo{})
-		if err != errTestConstPicker {
-			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestConstPicker)
+		if err != testutils.ErrTestConstPicker {
+			t.Fatalf("picker.Pick, got err %q, want err %q", err, testutils.ErrTestConstPicker)
 		}
 	}
 
@@ -453,8 +455,8 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	p2 := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
 		_, err := p2.Pick(balancer.PickInfo{})
-		if err != errTestConstPicker {
-			t.Fatalf("picker.Pick, got err %q, want err %q", err, errTestConstPicker)
+		if err != testutils.ErrTestConstPicker {
+			t.Fatalf("picker.Pick, got err %q, want err %q", err, testutils.ErrTestConstPicker)
 		}
 	}
 
@@ -507,7 +509,7 @@ var errTestInlineStateUpdate = fmt.Errorf("don't like addresses, empty or not")
 func (tb *testInlineUpdateBalancer) HandleResolvedAddrs(a []resolver.Address, err error) {
 	tb.cc.UpdateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
-		Picker:            &testConstPicker{err: errTestInlineStateUpdate},
+		Picker:            &testutils.TestConstPicker{Err: errTestInlineStateUpdate},
 	})
 }
 
@@ -543,8 +545,8 @@ func (s) TestEDS_ChildPolicyUpdatePickerInline(t *testing.T) {
 
 func (s) TestDropPicker(t *testing.T) {
 	const pickCount = 12
-	var constPicker = &testConstPicker{
-		sc: testutils.TestSubConns[0],
+	var constPicker = &testutils.TestConstPicker{
+		SC: testutils.TestSubConns[0],
 	}
 
 	tests := []struct {
