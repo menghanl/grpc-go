@@ -376,8 +376,10 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
-	// Remove LDS resource, should trigger resource removed error.
+	// Remove LDS resource, should cancel the RDS watch, and trigger resource
+	// removed error.
 	v2Client.r.newLDSUpdate(map[string]ldsUpdate{})
+	<-v2Client.removeWatches[rdsURL]
 	if u, err := serviceUpdateCh.Receive(); err != nil || TypeOfError(u.(serviceUpdateErr).err) != ErrorTypeResourceNotFound {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
@@ -387,8 +389,8 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
 		testRDSName: {clusterName: testCDSName + "new"},
 	})
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
-		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
+	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
+		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
 	}
 
 	// Add LDS resource, but not RDS resource, should
@@ -400,7 +402,14 @@ func (s) TestServiceResourceRemoved(t *testing.T) {
 		testLDSName: {routeName: testRDSName},
 	})
 	<-v2Client.addWatches[rdsURL]
-	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{ServiceUpdate{Cluster: testCDSName + "new"}, nil}) {
+	if u, err := serviceUpdateCh.Receive(); err != testutils.ErrRecvTimeout {
+		t.Errorf("unexpected serviceUpdate: %v, want receiving from channel timeout", u)
+	}
+
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName + "new2"},
+	})
+	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{ServiceUpdate{Cluster: testCDSName + "new2"}, nil}) {
 		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
 	}
 }

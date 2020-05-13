@@ -72,12 +72,16 @@ func (w *serviceUpdateWatcher) handleLDSResp(update ldsUpdate, err error) {
 	if w.closed {
 		return
 	}
-	// TODO: this error case returns early, without canceling the existing RDS
-	// watch. If we decided to stop the RDS watch when LDS errors, move this
-	// after rdsCancel(). We may also need to check the error type and do
-	// different things based on that (e.g. cancel RDS watch only on
-	// resourceRemovedError, but not on connectionError).
 	if err != nil {
+		// We check the error type and do different things. For now, the only
+		// type we check is ResourceNotFound, which indicates the LDS resource
+		// was removed, and besides sending the error to callback, we also
+		// cancel the RDS watch.
+		if TypeOfError(err) == ErrorTypeResourceNotFound && w.rdsCancel != nil {
+			w.rdsCancel()
+		}
+		// The other error cases still return early without canceling the
+		// existing RDS watch.
 		w.serviceCb(ServiceUpdate{}, err)
 		return
 	}
