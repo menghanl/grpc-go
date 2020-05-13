@@ -337,3 +337,70 @@ func (s) TestServiceWatchWithClientClose(t *testing.T) {
 		t.Fatal(cbErr)
 	}
 }
+
+// TestServiceResourceRemoved covers the cases:
+// - an update is received after a watch()
+// - another update is received, with one resource removed
+//   - this should trigger callback with resource removed error
+// - one more update without the removed resource
+//   - the callback (above) shouldn't receive any update
+func (s) TestServiceResourceRemoved(t *testing.T) {
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	defer cleanup()
+
+	c, err := New(clientOpts(testXDSServer))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer c.Close()
+
+	v2Client := <-v2ClientCh
+
+	serviceUpdateCh := testutils.NewChannel()
+	c.WatchService(testLDSName, func(update ServiceUpdate, err error) {
+		serviceUpdateCh.Send(serviceUpdateErr{u: update, err: err})
+	})
+
+	wantUpdate := ServiceUpdate{Cluster: testCDSName}
+
+	<-v2Client.addWatches[ldsURL]
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName},
+	})
+	<-v2Client.addWatches[rdsURL]
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName},
+	})
+
+	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	// Remove LDS resource, should trigger resource removed error.
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{})
+	if u, err := serviceUpdateCh.Receive(); err != nil || TypeOfError(u.(serviceUpdateErr).err) != ErrorTypeResourceNotFound {
+		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
+	}
+
+	// Send RDS update for the removed LDS resource, expect no updates to
+	// callback, because RDS should be canceled.
+	v2Client.r.newRDSUpdate(map[string]rdsUpdate{
+		testRDSName: {clusterName: testCDSName + "new"},
+	})
+	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{wantUpdate, nil}) {
+		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	// Add LDS resource, but not RDS resource, should
+	//  - start a new RDS watch
+	//  - recv update, because RDS is in cache.
+	//
+	// TODO: when we implement cache clearing, this may need to change.
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName: {routeName: testRDSName},
+	})
+	<-v2Client.addWatches[rdsURL]
+	if u, err := serviceUpdateCh.Receive(); err != nil || u != (serviceUpdateErr{ServiceUpdate{Cluster: testCDSName + "new"}, nil}) {
+		t.Errorf("unexpected serviceUpdate: %v, error receiving from channel: %v", u, err)
+	}
+}

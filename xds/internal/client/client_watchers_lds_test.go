@@ -228,3 +228,77 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 		t.Errorf("unexpected ldsUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
+
+// TestLDSResourceRemoved covers the cases:
+// - an update is received after a watch()
+// - another update is received, with one resource removed
+//   - this should trigger callback with resource removed error
+// - one more update without the removed resource
+//   - the callback (above) shouldn't receive any update
+func (s) TestLDSResourceRemoved(t *testing.T) {
+	v2ClientCh, cleanup := overrideNewXDSV2Client()
+	defer cleanup()
+
+	c, err := New(clientOpts(testXDSServer))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer c.Close()
+
+	v2Client := <-v2ClientCh
+
+	ldsUpdateCh1 := testutils.NewChannel()
+	c.watchLDS(testLDSName+"1", func(update ldsUpdate, err error) {
+		ldsUpdateCh1.Send(ldsUpdateErr{u: update, err: err})
+	})
+	// Another watch for a different name.
+	ldsUpdateCh2 := testutils.NewChannel()
+	c.watchLDS(testLDSName+"2", func(update ldsUpdate, err error) {
+		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
+	})
+
+	wantUpdate1 := ldsUpdate{routeName: testEDSName + "1"}
+	wantUpdate2 := ldsUpdate{routeName: testEDSName + "2"}
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName + "1": wantUpdate1,
+		testLDSName + "2": wantUpdate2,
+	})
+
+	if u, err := ldsUpdateCh1.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate1, nil}) {
+		t.Errorf("unexpected ldsUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+		t.Errorf("unexpected ldsUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	// Send another update to remove resource 1.
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName + "2": wantUpdate2,
+	})
+
+	// watcher 1 should get an error.
+	if u, err := ldsUpdateCh1.Receive(); err != nil || TypeOfError(u.(ldsUpdateErr).err) != ErrorTypeResourceNotFound {
+		t.Errorf("unexpected ldsUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
+	}
+
+	// watcher 2 should get the same update again.
+	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+		t.Errorf("unexpected ldsUpdate: %v, error receiving from channel: %v", u, err)
+	}
+
+	// Send one more update without resource 1.
+	v2Client.r.newLDSUpdate(map[string]ldsUpdate{
+		testLDSName + "2": wantUpdate2,
+	})
+
+	// watcher 1 should get an error.
+	if u, err := ldsUpdateCh1.Receive(); err != testutils.ErrRecvTimeout {
+		t.Errorf("unexpected ldsUpdate: %v, want receiving from channel timeout", u)
+	}
+
+	// watcher 2 should get the same update again.
+	if u, err := ldsUpdateCh2.Receive(); err != nil || u != (ldsUpdateErr{wantUpdate2, nil}) {
+		t.Errorf("unexpected ldsUpdate: %v, error receiving from channel: %v", u, err)
+	}
+}
