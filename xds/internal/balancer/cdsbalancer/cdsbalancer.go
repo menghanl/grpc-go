@@ -298,7 +298,7 @@ func (b *cdsBalancer) handleErrorFromUpdate(err error) {
 		// errors.
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
-			Picker:            base.NewErrPickerV2(err),
+			Picker:            base.NewErrPicker(err),
 		})
 	}
 }

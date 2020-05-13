@@ -447,7 +447,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// An error after eds balancer is build, eds should receive the error. This
 	// is not a resource not found error, watch shouldn't be canceled
 	err2 := errors.New("cdsBalancer resolver error 2")
-	cdsB.ResolverError(err2)
+	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, err2)
 	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
@@ -455,12 +455,12 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 		t.Fatalf("eds balancer should get error, waitForError failed: %v", err)
 	}
 
-	// A resource not found error. Watch should be canceled, and eds should
-	// receive the error.
+	// A resource not found error. Watch should not be canceled because this
+	// means CDS resource is removed, and eds should receive the error.
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
-	cdsB.ResolverError(resourceErr)
-	if err := xdsC.WaitForCancelClusterWatch(); err != nil {
-		t.Fatalf("want watch to be canceled, watchForCancel failed: %v", err)
+	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, resourceErr)
+	if err := xdsC.WaitForCancelClusterWatch(); err == nil {
+		t.Fatalf("want watch to be not canceled, watchForCancel should timeout")
 	}
 	if err := edsB.waitForResolverError(resourceErr); err != nil {
 		t.Fatalf("eds balancer should get resource-not-found error, waitForError failed: %v", err)
