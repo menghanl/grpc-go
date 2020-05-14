@@ -438,9 +438,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}}
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: addrs},
 		BalancerConfig: &EDSConfig{
 			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
@@ -465,11 +463,14 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, resourceErr)
+	// Even if error is resource not found, watch shouldn't be canceled, because
+	// this is an EDS resource removed (and xds client actually never sends this
+	// error, but we still handles it).
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
 		t.Fatalf("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForEDSResponse(xdsclient.EndpointsUpdate{}); err != nil {
-		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
+		t.Fatalf("eds impl expecting empty update, got %v", err)
 	}
 }
 
@@ -494,9 +495,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	addrs := []resolver.Address{{Addr: "1.1.1.1:10001"}}
 	edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{Addresses: addrs},
 		BalancerConfig: &EDSConfig{
 			BalancerName:   testBalancerNameFooBar,
 			EDSServiceName: testEDSClusterName,
@@ -511,7 +510,6 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	}
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
-	// xdsC.InvokeWatchEDSCallback(nil, connectionErr)
 	edsB.ResolverError(connectionErr)
 	if err := xdsC.WaitForCancelEDSWatch(); err == nil {
 		t.Fatalf("watch was canceled, want not canceled (timeout error)")
@@ -521,7 +519,6 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
-	// xdsC.InvokeWatchEDSCallback(nil, resourceErr)
 	edsB.ResolverError(resourceErr)
 	if err := xdsC.WaitForCancelEDSWatch(); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
