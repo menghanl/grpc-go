@@ -159,9 +159,8 @@ func (s) TestClientWrapperWatchEDS(t *testing.T) {
 //   edsBalancer with the received error.
 func (s) TestClientWrapperHandleUpdateError(t *testing.T) {
 	edsRespChan := testutils.NewChannel()
-	newEDS := func(update xdsclient.EndpointsUpdate, err error) error {
+	newEDS := func(update xdsclient.EndpointsUpdate, err error) {
 		edsRespChan.Send(&edsUpdate{resp: update, err: err})
-		return nil
 	}
 
 	cw := newXDSClientWrapper(newEDS, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}}, nil, nil)

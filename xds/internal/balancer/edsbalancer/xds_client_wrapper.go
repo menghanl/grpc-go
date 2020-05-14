@@ -50,7 +50,7 @@ var (
 type xdsclientWrapper struct {
 	logger *grpclog.PrefixLogger
 
-	newEDSUpdate func(xdsclient.EndpointsUpdate, error) error
+	newEDSUpdate func(xdsclient.EndpointsUpdate, error)
 	bbo          balancer.BuildOptions
 	loadStore    lrs.Store
 
@@ -77,7 +77,7 @@ type xdsclientWrapper struct {
 //
 // The given callbacks won't be called until the underlying xds_client is
 // working and sends updates.
-func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error) error, bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
+func newXDSClientWrapper(newEDSUpdate func(xdsclient.EndpointsUpdate, error), bbo balancer.BuildOptions, loadStore lrs.Store, logger *grpclog.PrefixLogger) *xdsclientWrapper {
 	return &xdsclientWrapper{
 		logger:       logger,
 		newEDSUpdate: newEDSUpdate,
@@ -187,9 +187,7 @@ func (c *xdsclientWrapper) startEndpointsWatch(nameToWatch string) {
 	}
 	cancelEDSWatch := c.xdsclient.WatchEndpoints(c.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
 		c.logger.Infof("Watch update from xds-client %p, content: %+v", c.xdsclient, update)
-		if err := c.newEDSUpdate(update, err); err != nil {
-			c.logger.Warningf("xds: processing new EDS update failed due to %v.", err)
-		}
+		c.newEDSUpdate(update, err)
 	})
 	c.logger.Infof("Watch started on resource name %v with xds-client %p", c.edsServiceName, c.xdsclient)
 	c.cancelEndpointsWatch = func() {

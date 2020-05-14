@@ -67,8 +67,6 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	x.logger = grpclog.NewPrefixLogger(loggingPrefix(x))
 	x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, loadStore, x.logger)
 	x.client = newXDSClientWrapper(x.handleEDSUpdate, x.buildOpts, loadStore, x.logger)
-	// x.edsImpl = newEDSBalancer(x.cc, x.enqueueChildBalancerState, loadStore, x.logger)
-	// x.client = newXDSClientWrapper(x.handleEDSUpdate, x.loseContact, x.buildOpts, loadStore, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
 	return x
@@ -156,19 +154,14 @@ func (x *edsBalancer) run() {
 // If the error is connection error, it should be handled for fallback purposes.
 //
 // If the error is resource-not-found:
-// - If it's from CDS balancer, it means CDS resources were removed. The EDS
-// watch should be canceled (and is already canceled by the caller of this
-// function).
+// - If it's from CDS balancer (shows as a resolver error), it means LDS or CDS
+// resources were removed. The EDS watch should be canceled (and is already
+// canceled by the caller of this function).
 // - If it's from xds client, it means EDS resource were removed. The EDS
 // watcher should keep watching.
 // In both cases, the sub-balancers will be closed, and the future picks will
 // fail.
 func (x *edsBalancer) handleErrorFromUpdate(err error) {
-	// TODO: Need to distinguish between connection errors and resource removed
-	// errors. For the former, we will need to handle it later on for fallback.
-	//
-	// For the latter, closing sub-balancers and fail the pickers.
-
 	// If it's a resource-not-found error
 	// - it could come from CDS balancer, so the CDS resources were removed
 	// - it could come from xds client, so the EDS resources were removed
@@ -176,28 +169,17 @@ func (x *edsBalancer) handleErrorFromUpdate(err error) {
 	// all fail.
 	if xdsclient.TypeOfError(err) == xdsclient.ErrorTypeResourceNotFound {
 		// FIXME: does an empty update closes all sub-balancers?
+		// -- Yes
 		//
 		// FIXME: what picker do we get after closing all sub-balancers? It
 		// should update picker with an error picker. Needs tests to verify.
+		// -- Transient failure
 		x.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
 	}
 
 	// FIXME: do we need to manually update the picker to an error picker with
 	// the err passed in? If we do, we need to make sure the picker won't be
 	// replaced by a later picker update.
-
-	// if b.edsLB != nil {
-	// 	b.edsLB.ResolverError(err)
-	// } else {
-	// 	// If eds balancer was never created, fail the RPCs with
-	// 	// errors.
-	// 	b.cc.UpdateState(balancer.State{
-	// 		ConnectivityState: connectivity.TransientFailure,
-	// 		Picker:            base.NewErrPickerV2(err),
-	// 	})
-	// }
-
-	// panic("www" + err.Error())
 }
 
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
@@ -233,8 +215,8 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	case error:
 		// This is an error from the resolver (can be the parent CDS balancer).
 		if xdsclient.TypeOfError(u) == xdsclient.ErrorTypeResourceNotFound {
-			// A resource-not-found error, means the CDS resource was removed.
-			// Stop the EDS watch.
+			// A resource-not-found error, means the resource (can be either LDS
+			// or CDS) was removed. Stop the EDS watch.
 			x.client.cancelWatch()
 		}
 		x.handleErrorFromUpdate(u)
@@ -288,15 +270,11 @@ type edsUpdate struct {
 	err  error
 }
 
-func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error) error {
-	// TODO: this function should take (resp, error), and send them together on
-	// the channel. There doesn't need to be a separate `loseContact` function.
+func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error) {
 	select {
 	case x.xdsClientUpdate <- &edsUpdate{resp: resp, err: err}:
 	case <-x.ctx.Done():
 	}
-
-	return nil
 }
 
 type balancerStateWithPriority struct {
