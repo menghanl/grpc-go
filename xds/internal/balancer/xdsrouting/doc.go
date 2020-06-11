@@ -16,12 +16,5 @@
  *
  */
 
-// Package balancer installs all the xds balancers.
-package balancer
-
-import (
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer"    // Register the CDS balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/edsbalancer"    // Register the EDS balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget" // Register the weighted_target balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/xdsrouting"     // Register the xds_routing balancer
-)
+// Package xdsrouting implements the routing balancer for xds.
+package xdsrouting
