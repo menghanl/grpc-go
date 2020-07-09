@@ -16,12 +16,15 @@
  *
  */
 
-// Package balancer installs all the xds balancers.
-package balancer
+package client
 
 import (
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer"    // Register the CDS balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/edsbalancer"    // Register the EDS balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget" // Register the weighted_target balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/xdsrouting"     // Register the xds_routing balancer
+	"os"
+	"strings"
 )
+
+const routingEnabledConfigStr = "GRPC_XDS_EXPERIMENTAL_ROUTING"
+
+// routing is enabled only if env variable is set to true. The default is false.
+// We may flip the default later.
+var routingEnabled = strings.EqualFold(os.Getenv(routingEnabledConfigStr), "true")
