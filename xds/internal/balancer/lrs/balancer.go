@@ -144,8 +144,7 @@ func (ccw *ccWrapper) UpdateState(s balancer.State) {
 // xdsClientInterface contains only the xds_client methods needed by LRS
 // balancer. It's defined so we can override xdsclient in tests.
 type xdsClientInterface interface {
-	LoadStore() *load.Store
-	ReportLoad(server string, clusterName string) func()
+	ReportLoad(server string) (*load.Store, func())
 	Close()
 }
 
@@ -199,12 +198,17 @@ type xdsClientWrapper struct {
 	clusterName      string
 	edsServiceName   string
 	lrsServerName    string
-	load             *loadStoreWrapper
+	// loadOriginal is the load.Store for reporting loads to lrsServerName. It's
+	// returned by the client.
+	loadOriginal *load.Store
+	// loadWrapper is a wrapper with loadOriginal, with clusterName and
+	// edsServiceName. It's used children to report loads.
+	loadWrapper *loadStoreWrapper
 }
 
 func newXDSClientWrapper() *xdsClientWrapper {
 	return &xdsClientWrapper{
-		load: &loadStoreWrapper{},
+		loadWrapper: &loadStoreWrapper{},
 	}
 }
 
@@ -220,7 +224,6 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig, attr *attributes.Attribut
 			if w.c != clientFromAttr {
 				// xds client is different, restart.
 				restartLoadReport = true
-				updateLoadStore = true
 				w.c = clientFromAttr
 			}
 		}
@@ -244,34 +247,37 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig, attr *attributes.Attribut
 		w.lrsServerName = newConfig.LrsLoadReportingServerName
 	}
 
-	// This updates the clusterName and serviceName that will reported for the
-	// loads. The update here is too early, the perfect timing is when the
-	// picker is updated with the new connection. But from this balancer's point
-	// of view, it's impossible to tell.
-	//
-	// On the other hand, this will almost never happen. Each LRS policy
-	// shouldn't get updated config. The parent should do a graceful switch when
-	// the clusterName or serviceName is changed.
-	if updateLoadStore {
-		w.load.update(w.c.LoadStore(), w.clusterName, w.edsServiceName)
-	}
-
 	if restartLoadReport {
+		updateLoadStore = true
 		if w.cancelLoadReport != nil {
 			w.cancelLoadReport()
 			w.cancelLoadReport = nil
 		}
 		if w.c != nil {
-			w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName, w.clusterName)
+			w.loadOriginal, w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName)
+		}
+	}
+
+	if updateLoadStore {
+		// This updates the clusterName and serviceName that will reported for the
+		// loads. The update here is too early, the perfect timing is when the
+		// picker is updated with the new connection. But from this balancer's point
+		// of view, it's impossible to tell.
+		//
+		// On the other hand, this will almost never happen. Each LRS policy
+		// shouldn't get updated config. The parent should do a graceful switch when
+		// the clusterName or serviceName is changed.
+		if updateLoadStore {
+			w.loadWrapper.update(w.loadOriginal, w.clusterName, w.edsServiceName)
 		}
 	}
 }
 
 func (w *xdsClientWrapper) loadStore() load.PerClusterReporter {
-	if w.load.store == nil {
+	if w.loadWrapper.store == nil {
 		return nil
 	}
-	return w.load
+	return w.loadWrapper
 }
 
 func (w *xdsClientWrapper) close() {

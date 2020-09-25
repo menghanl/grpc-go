@@ -195,14 +195,14 @@ var (
 		BuildVersion:         gRPCVersion,
 		UserAgentName:        gRPCUserAgentName,
 		UserAgentVersionType: &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureLRSSendAllClusters},
 	}
 	v3NodeProto = &v3corepb.Node{
 		Id:                   "ENVOY_NODE_ID",
 		Metadata:             metadata,
 		UserAgentName:        gRPCUserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureLRSSendAllClusters},
 	}
 	nilCredsConfigV2 = &Config{
 		BalancerName: "trafficdirector.googleapis.com:443",
@@ -365,7 +365,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 					BuildVersion:         gRPCVersion,
 					UserAgentName:        gRPCUserAgentName,
 					UserAgentVersionType: &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-					ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+					ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureLRSSendAllClusters},
 				},
 			},
 		},

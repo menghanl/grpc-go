@@ -53,6 +53,7 @@ const (
 	credsInsecure                   = "insecure"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
+	clientFeatureLRSSendAllClusters = "envoy.lrs.supports_send_all_clusters"
 )
 
 var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
@@ -296,7 +297,7 @@ func (c *Config) updateNodeProto() error {
 		}
 		v3.UserAgentName = gRPCUserAgentName
 		v3.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
-		v3.ClientFeatures = append(v3.ClientFeatures, clientFeatureNoOverprovisioning)
+		v3.ClientFeatures = append(v3.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureLRSSendAllClusters)
 		c.NodeProto = v3
 		return nil
 	}
@@ -319,6 +320,6 @@ func (c *Config) updateNodeProto() error {
 	v2.BuildVersion = gRPCVersion
 	v2.UserAgentName = gRPCUserAgentName
 	v2.UserAgentVersionType = &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
-	v2.ClientFeatures = append(v2.ClientFeatures, clientFeatureNoOverprovisioning)
+	v2.ClientFeatures = append(v2.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureLRSSendAllClusters)
 	return nil
 }
