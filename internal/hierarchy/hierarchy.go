@@ -46,6 +46,13 @@ func Set(addr resolver.Address, path []string) resolver.Address {
 	return addr
 }
 
+// func Prepend(addr resolver.Address, seg string) resolver.Address {
+// 	oldPath := Get(addr)
+// 	newPath := append([]string{seg}, oldPath...)
+// 	addr.Attributes = addr.Attributes.WithValues(pathKey, newPath)
+// 	return addr
+// }
+
 // Group splits a slice of addresses into groups based on
 // the first hierarchy path. The first hierarchy path will be removed from the
 // result.

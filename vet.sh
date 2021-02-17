@@ -132,9 +132,9 @@ fi
 # TODO(dfawley): don't use deprecated functions in examples or first-party
 # plugins.
 SC_OUT="$(mktemp)"
-staticcheck -go 1.9 -checks 'inherit,-ST1015' ./... > "${SC_OUT}" || true
+staticcheck -go 1.9 -checks 'inherit,-ST1015,-ST1019' ./... > "${SC_OUT}" || true
 # Error if anything other than deprecation warnings are printed.
-not grep -v "is deprecated:.*SA1019" "${SC_OUT}"
+not grep -v "deprecated.*SA1019" "${SC_OUT}"
 # Only ignore the following deprecated types/fields/functions.
 not grep -Fv '.CredsBundle
 .HeaderMap

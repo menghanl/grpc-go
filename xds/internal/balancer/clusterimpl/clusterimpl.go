@@ -38,7 +38,8 @@ import (
 )
 
 const (
-	clusterImplName        = "xds_cluster_impl_experimental"
+	// Name is the name of the cluster_impl balancer.
+	Name                   = "xds_cluster_impl_experimental"
 	defaultRequestCountMax = 1024
 )
 
@@ -63,10 +64,11 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 
 	client, err := newXDSClient()
 	if err != nil {
-		b.logger.Errorf("failed to create xds-client: %v", err)
-		return nil
+		b.logger.Warningf("failed to create xds-client, load won't be reported: %v", err)
+	} else {
+		// Don't assign if err != nil, because client is a typed nil.
+		b.xdsC = client
 	}
-	b.xdsC = client
 	go b.run()
 
 	b.logger.Infof("Created")
@@ -74,7 +76,7 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 }
 
 func (clusterImplBB) Name() string {
-	return clusterImplName
+	return Name
 }
 
 func (clusterImplBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -95,7 +97,7 @@ type clusterImplBalancer struct {
 	logger *grpclog.PrefixLogger
 	xdsC   xdsClientInterface
 
-	config           *lbConfig
+	config           *LBConfig
 	childLB          balancer.Balancer
 	cancelLoadReport func()
 	clusterName      string
@@ -115,7 +117,7 @@ type clusterImplBalancer struct {
 
 // updateLoadStore checks the config for load store, and decides whether it
 // needs to restart the load reporting stream.
-func (cib *clusterImplBalancer) updateLoadStore(newConfig *lbConfig) error {
+func (cib *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	var updateLoadClusterAndService bool
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
@@ -169,7 +171,7 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 		return nil
 	}
 
-	newConfig, ok := s.BalancerConfig.(*lbConfig)
+	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
@@ -278,7 +280,10 @@ func (cib *clusterImplBalancer) Close() {
 		cib.childLB.Close()
 		cib.childLB = nil
 	}
-	cib.xdsC.Close()
+	if cib.xdsC != nil {
+		fmt.Printf("closing, %v, %T, %v", cib.xdsC, cib.xdsC, cib.xdsC != nil)
+		cib.xdsC.Close()
+	}
 	cib.closed.Fire()
 	cib.logger.Infof("Shutdown")
 }

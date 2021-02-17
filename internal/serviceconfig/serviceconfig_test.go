@@ -29,16 +29,18 @@ import (
 )
 
 type testBalancerConfigType struct {
-	externalserviceconfig.LoadBalancingConfig
+	externalserviceconfig.LoadBalancingConfig `json:"-"`
+
+	Check bool `json:"check"`
 }
 
-var testBalancerConfig = testBalancerConfigType{}
+var testBalancerConfig = testBalancerConfigType{Check: true}
 
 const (
 	testBalancerBuilderName          = "test-bb"
 	testBalancerBuilderNotParserName = "test-bb-not-parser"
 
-	testBalancerConfigJSON = `{"test-balancer-config":"true"}`
+	testBalancerConfigJSON = `{"check":true}`
 )
 
 type testBalancerBuilder struct {
@@ -129,6 +131,60 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 			}
 			if !cmp.Equal(bc, tt.want) {
 				t.Errorf("diff: %v", cmp.Diff(bc, tt.want))
+			}
+		})
+	}
+}
+
+func TestBalancerConfigMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		bc   BalancerConfig
+	}{
+		{
+			name: "OK",
+			json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJSON),
+			bc: BalancerConfig{
+				Name:   testBalancerBuilderName,
+				Config: testBalancerConfig,
+			},
+		},
+		// {
+		// 	name: "first balancer not registered",
+		// 	json: fmt.Sprintf(`[{"balancer1":"1"},{%q: %v}]`, testBalancerBuilderName, testBalancerConfigJSON),
+		// 	bc: BalancerConfig{
+		// 		Name:   testBalancerBuilderName,
+		// 		Config: testBalancerConfig,
+		// 	},
+		// },
+		// {
+		// 	name: "balancer registered but builder not parser",
+		// 	json: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderNotParserName, testBalancerConfigJSON),
+		// 	bc: BalancerConfig{
+		// 		Name:   testBalancerBuilderNotParserName,
+		// 		Config: nil,
+		// 	},
+		// },
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := tt.bc.MarshalJSON()
+			if err != nil {
+				t.Fatalf("failed to marshal: %v", err)
+			}
+
+			str := string(b)
+			if str != tt.json {
+				t.Fatalf("got str %q, want %q", str, tt.json)
+			}
+
+			var bc BalancerConfig
+			if err := bc.UnmarshalJSON(b); err != nil {
+				t.Errorf("failed to mnmarshal: %v", err)
+			}
+			if !cmp.Equal(bc, tt.bc) {
+				t.Errorf("diff: %v", cmp.Diff(bc, tt.bc))
 			}
 		})
 	}

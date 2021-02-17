@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
 
@@ -35,8 +36,9 @@ import (
 // Init 0 and 1; 0 is up, use 0; add 2, use 0; remove 2, use 0.
 func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -51,14 +53,12 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p1 := <-cc.NewPickerCh
-	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Add p2, it shouldn't cause any udpates.
@@ -101,8 +101,9 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 // down, use 2; remove 2, use 1.
 func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -117,33 +118,27 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p0 := <-cc.NewPickerCh
-	want := []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Turn down 0, 1 is used.
-	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
-	p1 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
-		}
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Add p2, it shouldn't cause any udpates.
@@ -164,22 +159,18 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Turn down 1, use 2
-	edsb.handleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
-	p2 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
-		}
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Remove 2, use 1.
@@ -195,12 +186,10 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Should get an update with 1's old picker, to override 2's old picker.
-	p3 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		if _, err := p3.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
-		}
+	if err := testErrPickerFromCh(cc.NewPickerCh, balancer.ErrTransientFailure); err != nil {
+		t.Fatal(err)
 	}
+
 }
 
 // Add a lower priority while the higher priority is down.
@@ -208,8 +197,9 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 // Init 0 and 1; 0 and 1 both down; add 2, use 2.
 func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with different priorities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -224,21 +214,18 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Turn down 0, 1 is used.
-	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
 	// Turn down 1, pick should error.
-	edsb.handleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Test pick failure.
-	pFail := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		if _, err := pFail.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
-		}
+	if err := testErrPickerFromCh(cc.NewPickerCh, balancer.ErrTransientFailure); err != nil {
+		t.Fatal(err)
 	}
 
 	// Add p2, it should create a new SubConn.
@@ -253,17 +240,14 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
-	p2 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
-		}
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+		t.Fatal(err)
 	}
+
 }
 
 // When a higher priority becomes available, all lower priorities are closed.
@@ -271,8 +255,9 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 // Init 0,1,2; 0 and 1 down, use 2; 0 up, close 1 and 2.
 func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with priorities [0,1,2], each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -288,39 +273,55 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Turn down 0, 1 is used.
-	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
 	// Turn down 1, 2 is used.
-	edsb.handleSubConnStateChange(sc1, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
-	p2 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p2.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc2)
-		}
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+		t.Fatal(err)
 	}
 
 	// When 0 becomes ready, 0 should be used, 1 and 2 should all be closed.
-	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	var (
+		scToRemove    []balancer.SubConn
+		scToRemoveMap = make(map[balancer.SubConn]struct{})
+	)
+	// Each subconn is removed twice. This is OK in production, but it makes
+	// testing harder.
+	//
+	// The sub-balancer to be closed is priority's child, clusterimpl, who has
+	// weightedtarget as children.
+	//
+	// - When clusterimpl is removed from priority's balancergroup, all its
+	// subconns are removed once.
+	// - When clusterimpl is closed, it closes weightedtarget, and this
+	// weightedtarget's balancer removes all the same subconns again.
+	for i := 0; i < 4; i++ {
+		// We expect 2 subconns, so we recv from channel 4 times.
+		scToRemoveMap[<-cc.RemoveSubConnCh] = struct{}{}
+	}
+	for sc := range scToRemoveMap {
+		scToRemove = append(scToRemove, sc)
+	}
 
 	// sc1 and sc2 should be removed.
 	//
 	// With localities caching, the lower priorities are closed after a timeout,
 	// in goroutines. The order is no longer guaranteed.
-	scToRemove := []balancer.SubConn{<-cc.RemoveSubConnCh, <-cc.RemoveSubConnCh}
 	if !(cmp.Equal(scToRemove[0], sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
 		cmp.Equal(scToRemove[1], sc2, cmp.AllowUnexported(testutils.TestSubConn{}))) &&
 		!(cmp.Equal(scToRemove[0], sc2, cmp.AllowUnexported(testutils.TestSubConn{})) &&
@@ -329,12 +330,8 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	}
 
 	// Test pick with 0.
-	p0 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p0.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc0)
-		}
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -345,16 +342,17 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func() func() {
-		old := defaultPriorityInitTimeout
-		defaultPriorityInitTimeout = testPriorityInitTimeout
+		old := priority.DefaultPriorityInitTimeout
+		priority.DefaultPriorityInitTimeout = testPriorityInitTimeout
 		return func() {
-			defaultPriorityInitTimeout = old
+			priority.DefaultPriorityInitTimeout = old
 		}
 	}()()
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with different priorities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -369,7 +367,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 
 	// Keep 0 in connecting, 1 will be used after init timeout.
-	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 
 	// Make sure new SubConn is created before timeout.
 	select {
@@ -384,16 +382,12 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
-	p1 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		gotSCSt, _ := p1.Pick(balancer.PickInfo{})
-		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc1)
-		}
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -403,8 +397,9 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 //  - add localities to existing p0 and p1
 func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with different priorities, each with one backend.
 	clab0 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -417,36 +412,32 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc0 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p0 := <-cc.NewPickerCh
-	want := []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Turn down p0 subconns, p1 subconns will be created.
-	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testEndpointAddrs[1]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	p1 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Reconnect p0 subconns, p1 subconn will be closed.
-	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
@@ -454,10 +445,8 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	}
 
 	// Test roundrobin with only p0 subconns.
-	p2 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Add two localities, with two priorities, with one backend.
@@ -473,32 +462,28 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc2 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only two p0 subconns.
-	p3 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc0, sc2}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p3)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0, sc2}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Turn down p0 subconns, p1 subconns will be created.
-	edsb.handleSubConnStateChange(sc0, connectivity.TransientFailure)
-	edsb.handleSubConnStateChange(sc2, connectivity.TransientFailure)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	sc3 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc3, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc3, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	sc4 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc4, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc4, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	p4 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc3, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p4)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc3, sc4}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -506,16 +491,17 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func() func() {
-		old := defaultPriorityInitTimeout
-		defaultPriorityInitTimeout = testPriorityInitTimeout
+		old := priority.DefaultPriorityInitTimeout
+		priority.DefaultPriorityInitTimeout = testPriorityInitTimeout
 		return func() {
-			defaultPriorityInitTimeout = old
+			priority.DefaultPriorityInitTimeout = old
 		}
 	}()()
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with different priorities, each with one backend.
 	clab0 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -528,14 +514,12 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc0 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc0, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc0, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p0 := <-cc.NewPickerCh
-	want := []balancer.SubConn{sc0}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p0)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Remove all priorities.
@@ -544,16 +528,16 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// p0 subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
+	<-cc.RemoveSubConnCh // Drain the duplicate subconn removed.
 	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
 	}
 
+	// time.Sleep(time.Second)
+
 	// Test pick return TransientFailure.
-	pFail := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		if _, err := pFail.Pick(balancer.PickInfo{}); err != errAllPrioritiesRemoved {
-			t.Fatalf("want pick error %v, got %v", errAllPrioritiesRemoved, err)
-		}
+	if err := testErrPickerFromCh(cc.NewPickerCh, errAllPrioritiesRemoved); err != nil {
+		t.Fatal(err)
 	}
 
 	// Re-add two localities, with previous priorities, but different backends.
@@ -578,14 +562,12 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc11 := <-cc.NewSubConnCh
-	edsb.handleSubConnStateChange(sc11, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc11, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc11, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc11, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	p1 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc11}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc11}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Remove p1 from EDS, to fallback to p0.
@@ -595,28 +577,24 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// p1 subconn should be removed.
 	scToRemove1 := <-cc.RemoveSubConnCh
+	<-cc.RemoveSubConnCh // Drain the duplicate subconn removed.
 	if !cmp.Equal(scToRemove1, sc11, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc11, scToRemove1)
 	}
 
 	// Test pick return TransientFailure.
-	pFail1 := <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		if scst, err := pFail1.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
-			t.Fatalf("want pick error _, %v, got %v, _ ,%v", balancer.ErrTransientFailure, scst, err)
-		}
+	if err := testErrPickerFromCh(cc.NewPickerCh, balancer.ErrNoSubConnAvailable); err != nil {
+		t.Fatal(err)
 	}
 
 	// Send an ready update for the p0 sc that was received when re-adding
 	// localities to EDS.
-	edsb.handleSubConnStateChange(sc01, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc01, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc01, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc01, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p2 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc01}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc01}); err != nil {
+		t.Fatal(err)
 	}
 
 	select {
@@ -630,76 +608,13 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 }
 
-func (s) TestPriorityType(t *testing.T) {
-	p0 := newPriorityType(0)
-	p1 := newPriorityType(1)
-	p2 := newPriorityType(2)
-
-	if !p0.higherThan(p1) || !p0.higherThan(p2) {
-		t.Errorf("want p0 to be higher than p1 and p2, got p0>p1: %v, p0>p2: %v", !p0.higherThan(p1), !p0.higherThan(p2))
-	}
-	if !p1.lowerThan(p0) || !p1.higherThan(p2) {
-		t.Errorf("want p1 to be between p0 and p2, got p1<p0: %v, p1>p2: %v", !p1.lowerThan(p0), !p1.higherThan(p2))
-	}
-	if !p2.lowerThan(p0) || !p2.lowerThan(p1) {
-		t.Errorf("want p2 to be lower than p0 and p1, got p2<p0: %v, p2<p1: %v", !p2.lowerThan(p0), !p2.lowerThan(p1))
-	}
-
-	if got := p1.equal(p0.nextLower()); !got {
-		t.Errorf("want p1 to be equal to p0's next lower, got p1==p0.nextLower: %v", got)
-	}
-
-	if got := p1.equal(newPriorityType(1)); !got {
-		t.Errorf("want p1 to be equal to priority with value 1, got p1==1: %v", got)
-	}
-}
-
-func (s) TestPriorityTypeEqual(t *testing.T) {
-	tests := []struct {
-		name   string
-		p1, p2 priorityType
-		want   bool
-	}{
-		{
-			name: "equal",
-			p1:   newPriorityType(12),
-			p2:   newPriorityType(12),
-			want: true,
-		},
-		{
-			name: "not equal",
-			p1:   newPriorityType(12),
-			p2:   newPriorityType(34),
-			want: false,
-		},
-		{
-			name: "one not set",
-			p1:   newPriorityType(1),
-			p2:   newPriorityTypeUnset(),
-			want: false,
-		},
-		{
-			name: "both not set",
-			p1:   newPriorityTypeUnset(),
-			p2:   newPriorityTypeUnset(),
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.p1.equal(tt.p2); got != tt.want {
-				t.Errorf("equal() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 // Test the case where the high priority contains no backends. The low priority
 // will be used.
 func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -714,14 +629,12 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p1 := <-cc.NewPickerCh
-	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Remove addresses from priority 0, should use p1.
@@ -733,7 +646,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// shutdown.
 	scToRemove := <-cc.RemoveSubConnCh
-	edsb.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
+	edsb.handleSubConnStateChange(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
@@ -742,14 +655,12 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 
 	// p1 is ready.
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	p2 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc2}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -757,8 +668,9 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 // priority will be used.
 func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// Two localities, with priorities [0, 1], each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -773,14 +685,12 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 
 	// p0 is ready.
-	edsb.handleSubConnStateChange(sc1, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc1, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	p1 := <-cc.NewPickerCh
-	want := []balancer.SubConn{sc1}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Set priority 0 endpoints to all unhealthy, should use p1.
@@ -794,7 +704,7 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	// p0 will remove the subconn, and ClientConn will send a sc update to
 	// transient failure.
 	scToRemove := <-cc.RemoveSubConnCh
-	edsb.handleSubConnStateChange(scToRemove, connectivity.Shutdown)
+	edsb.handleSubConnStateChange(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[1]; got != want {
@@ -803,14 +713,12 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	sc2 := <-cc.NewSubConnCh
 
 	// p1 is ready.
-	edsb.handleSubConnStateChange(sc2, connectivity.Connecting)
-	edsb.handleSubConnStateChange(sc2, connectivity.Ready)
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	edsb.handleSubConnStateChange(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	p2 := <-cc.NewPickerCh
-	want = []balancer.SubConn{sc2}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
-		t.Fatalf("want %v, got %v", want, err)
+	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -823,8 +731,9 @@ func (s) TestEDSPriority_FirstPriorityUnavailable(t *testing.T) {
 	defaultPriorityInitTimeout = testPriorityInitTimeout
 
 	cc := testutils.NewTestClientConn(t)
-	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
-	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
+	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil)
+	defer edsb.close()
+	edsb.enqueueChildBalancerStateUpdate = cc.UpdateState
 
 	// One localities, with priorities [0], each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)

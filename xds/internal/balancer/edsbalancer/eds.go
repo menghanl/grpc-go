@@ -23,12 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/roundrobin"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -48,8 +43,8 @@ type xdsClientInterface interface {
 }
 
 var (
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions, enqueueState func(priorityType, balancer.State), lw load.PerClusterReporter, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
-		return newEDSBalancerImpl(cc, opts, enqueueState, lw, logger)
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions, enqueueState func(balancer.State), logger *grpclog.PrefixLogger) edsBalancerImplInterface {
+		return newEDSBalancerImpl(cc, opts, enqueueState, logger)
 	}
 	newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 )
@@ -68,8 +63,6 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 		grpcUpdate:        make(chan interface{}),
 		xdsClientUpdate:   make(chan *edsUpdate),
 		childPolicyUpdate: buffer.NewUnbounded(),
-		lsw:               &loadStoreWrapper{},
-		config:            &EDSConfig{},
 	}
 	x.logger = prefixLogger(x)
 
@@ -80,7 +73,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 
 	x.xdsClient = client
-	x.edsImpl = newEDSBalancer(x.cc, opts, x.enqueueChildBalancerState, x.lsw, x.logger)
+	x.edsImpl = newEDSBalancer(x.cc, opts, x.enqueueChildBalancerState, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
 	return x
@@ -106,16 +99,10 @@ type edsBalancerImplInterface interface {
 	// handleEDSResponse passes the received EDS message from traffic director
 	// to eds balancer.
 	handleEDSResponse(edsResp xdsclient.EndpointsUpdate)
-	// handleChildPolicy updates the eds balancer the intra-cluster load
-	// balancing policy to use.
-	handleChildPolicy(name string, config json.RawMessage)
+	// handleServiceConfig updates the service config.
+	handleServiceConfig(cfg *EDSConfig, raw *serviceconfig.ParseResult)
 	// handleSubConnStateChange handles state change for SubConn.
-	handleSubConnStateChange(sc balancer.SubConn, state connectivity.State)
-	// updateState handle a balancer state update from the priority.
-	updateState(priority priorityType, s balancer.State)
-	// updateServiceRequestsConfig updates the service requests counter to the
-	// one for the given service name.
-	updateServiceRequestsConfig(serviceName string, max *uint32)
+	handleSubConnStateChange(sc balancer.SubConn, state balancer.SubConnState)
 	// close closes the eds balancer.
 	close()
 }
@@ -136,16 +123,12 @@ type edsBalancer struct {
 	childPolicyUpdate *buffer.Unbounded
 
 	xdsClient xdsClientInterface
-	lsw       *loadStoreWrapper
-	config    *EDSConfig // may change when passed a different service config
 	edsImpl   edsBalancerImplInterface
 
 	// edsServiceName is the edsServiceName currently being watched, not
 	// necessary the edsServiceName from service config.
 	edsServiceName       string
 	cancelEndpointsWatch func()
-	loadReportServer     *string // LRS is disabled if loadReporterServer is nil.
-	cancelLoadReport     func()
 }
 
 // run gets executed in a goroutine once edsBalancer is created. It monitors
@@ -161,8 +144,8 @@ func (x *edsBalancer) run() {
 			x.handleXDSClientUpdate(update)
 		case update := <-x.childPolicyUpdate.Get():
 			x.childPolicyUpdate.Load()
-			u := update.(*balancerStateWithPriority)
-			x.edsImpl.updateState(u.priority, u.s)
+			u := update.(balancer.State)
+			x.cc.UpdateState(u)
 		case <-x.closed.Done():
 			x.cancelWatch()
 			x.xdsClient.Close()
@@ -202,7 +185,7 @@ func (x *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
-		x.edsImpl.handleSubConnStateChange(u.sc, u.state.ConnectivityState)
+		x.edsImpl.handleSubConnStateChange(u.sc, u.state)
 	case *balancer.ClientConnState:
 		x.logger.Infof("Receive update from resolver, balancer config: %+v", u.BalancerConfig)
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
@@ -211,22 +194,9 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			return
 		}
 
-		if err := x.handleServiceConfigUpdate(cfg); err != nil {
+		if err := x.handleServiceConfigUpdate(cfg, u.ResolverState.ServiceConfig); err != nil {
 			x.logger.Warningf("failed to update xDS client: %v", err)
 		}
-
-		x.edsImpl.updateServiceRequestsConfig(cfg.EDSServiceName, cfg.MaxConcurrentRequests)
-
-		// We will update the edsImpl with the new child policy, if we got a
-		// different one.
-		if !cmp.Equal(cfg.ChildPolicy, x.config.ChildPolicy, cmpopts.EquateEmpty()) {
-			if cfg.ChildPolicy != nil {
-				x.edsImpl.handleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
-			} else {
-				x.edsImpl.handleChildPolicy(roundrobin.Name, nil)
-			}
-		}
-		x.config = cfg
 	case error:
 		x.handleErrorFromUpdate(u, true)
 	default:
@@ -237,26 +207,13 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 
 // handleServiceConfigUpdate applies the service config update, watching a new
 // EDS service name and restarting LRS stream, as required.
-func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
+func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig, raw *serviceconfig.ParseResult) error {
 	// Restart EDS watch when the edsServiceName has changed.
 	if x.edsServiceName != config.EDSServiceName {
 		x.edsServiceName = config.EDSServiceName
 		x.startEndpointsWatch()
-		// TODO: this update for the LRS service name is too early. It should
-		// only apply to the new EDS response. But this is applied to the RPCs
-		// before the new EDS response. To fully fix this, the EDS balancer
-		// needs to do a graceful switch to another EDS implementation.
-		//
-		// This is OK for now, because we don't actually expect edsServiceName
-		// to change. Fix this (a bigger change) will happen later.
-		x.lsw.updateServiceName(x.edsServiceName)
 	}
-
-	// Restart load reporting when the loadReportServer name has changed.
-	if !equalStringPointers(x.loadReportServer, config.LrsLoadReportingServerName) {
-		loadStore := x.startLoadReport(config.LrsLoadReportingServerName)
-		x.lsw.updateLoadStore(loadStore)
-	}
+	x.edsImpl.handleServiceConfig(config, raw)
 
 	return nil
 }
@@ -281,33 +238,10 @@ func (x *edsBalancer) startEndpointsWatch() {
 }
 
 func (x *edsBalancer) cancelWatch() {
-	x.loadReportServer = nil
-	if x.cancelLoadReport != nil {
-		x.cancelLoadReport()
-	}
 	x.edsServiceName = ""
 	if x.cancelEndpointsWatch != nil {
 		x.cancelEndpointsWatch()
 	}
-}
-
-// startLoadReport starts load reporting. If there's already a load reporting in
-// progress, it cancels that.
-//
-// Caller can cal this when the loadReportServer name changes, but
-// edsServiceName doesn't (so we only need to restart load reporting, not EDS
-// watch).
-func (x *edsBalancer) startLoadReport(loadReportServer *string) *load.Store {
-	x.loadReportServer = loadReportServer
-	if x.cancelLoadReport != nil {
-		x.cancelLoadReport()
-	}
-	if loadReportServer == nil {
-		return nil
-	}
-	ls, cancel := x.xdsClient.ReportLoad(*loadReportServer)
-	x.cancelLoadReport = cancel
-	return ls
 }
 
 func (x *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
@@ -361,16 +295,8 @@ func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error)
 	}
 }
 
-type balancerStateWithPriority struct {
-	priority priorityType
-	s        balancer.State
-}
-
-func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State) {
-	x.childPolicyUpdate.Put(&balancerStateWithPriority{
-		priority: p,
-		s:        s,
-	})
+func (x *edsBalancer) enqueueChildBalancerState(s balancer.State) {
+	x.childPolicyUpdate.Put(s)
 }
 
 func (x *edsBalancer) Close() {

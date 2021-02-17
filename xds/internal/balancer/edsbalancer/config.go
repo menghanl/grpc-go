@@ -35,6 +35,10 @@ type EDSConfig struct {
 	// FallBackPolicy represents the load balancing config for the
 	// fallback.
 	FallBackPolicy *loadBalancingConfig
+	// Cluster name, it's never set by the parent now. Will be set in the
+	// future.
+	// FIXME: set this field in CDS, and support in UnmarshalJSON.
+	ClusterName string
 	// Name to use in EDS query.  If not present, defaults to the server
 	// name from the target URI.
 	EDSServiceName string
