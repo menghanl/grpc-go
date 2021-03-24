@@ -84,7 +84,9 @@ func buildPriorityConfig(edsResp xdsclient.EndpointsUpdate, c *EDSConfig) (*prio
 		maxRequest  *uint32
 	)
 	if c != nil {
-		childPolicy = c.ChildPolicy.Name // FIXME: handle nil
+		if c.ChildPolicy != nil {
+			childPolicy = c.ChildPolicy.Name // FIXME: is this correct?
+		}
 		cluster = c.ClusterName
 		edsService = c.EDSServiceName
 		lrsServer = c.LrsLoadReportingServerName
