@@ -35,12 +35,9 @@ type EDSConfig struct {
 	// FallBackPolicy represents the load balancing config for the
 	// fallback.
 	FallBackPolicy *loadBalancingConfig
-	// Cluster name, it's never set by the parent now. Will be set in the
-	// future.
-	// FIXME: set this field in CDS, and support in UnmarshalJSON.
+	// Cluster name.
 	ClusterName string
-	// Name to use in EDS query.  If not present, defaults to the server
-	// name from the target URI.
+	// Name to use in EDS query. If not set, use ClusterName.
 	EDSServiceName string
 	// MaxConcurrentRequests is the max number of concurrent request allowed for
 	// this service. If unset, default value 1024 is used.
@@ -63,6 +60,7 @@ type EDSConfig struct {
 type edsConfigJSON struct {
 	ChildPolicy                []*loadBalancingConfig
 	FallbackPolicy             []*loadBalancingConfig
+	ClusterName                string
 	EDSServiceName             string
 	MaxConcurrentRequests      *uint32
 	LRSLoadReportingServerName *string
@@ -77,6 +75,7 @@ func (l *EDSConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	l.ClusterName = configJSON.ClusterName
 	l.EDSServiceName = configJSON.EDSServiceName
 	l.MaxConcurrentRequests = configJSON.MaxConcurrentRequests
 	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName

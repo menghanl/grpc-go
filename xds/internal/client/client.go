@@ -404,9 +404,12 @@ type SecurityConfig struct {
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
-	// ServiceName is the service name corresponding to the clusterName which
+	// ClusterName is the service name corresponding to the clusterName which
 	// is being watched for through CDS.
-	ServiceName string
+	ClusterName string
+	// EDSServiceName is an optional name for EDS. If it's not set, the balancer
+	// should watch EDS resources for ClusterName.
+	EDSServiceName string
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
 	// SecurityCfg contains security configuration sent by the control plane.

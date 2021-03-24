@@ -611,14 +611,14 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	cu.Raw = r
 	// If the Cluster message in the CDS response did not contain a
 	// serviceName, we will just use the clusterName for EDS.
-	if cu.ServiceName == "" {
-		cu.ServiceName = cluster.GetName()
+	if cu.ClusterName == "" {
+		cu.ClusterName = cluster.GetName()
 	}
 	return cluster.GetName(), cu, nil
 }
 
 func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
+	emptyUpdate := ClusterUpdate{ClusterName: "", EnableLRS: false}
 	switch {
 	case cluster.GetType() != v3clusterpb.Cluster_EDS:
 		return emptyUpdate, fmt.Errorf("unexpected cluster type %v in response: %+v", cluster.GetType(), cluster)
@@ -639,7 +639,7 @@ func validateCluster(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	}
 
 	return ClusterUpdate{
-		ServiceName: cluster.GetEdsClusterConfig().GetServiceName(),
+		ClusterName: cluster.GetEdsClusterConfig().GetServiceName(),
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
 		MaxRequests: circuitBreakersFromCluster(cluster),

@@ -209,8 +209,12 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 // EDS service name and restarting LRS stream, as required.
 func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig, raw *serviceconfig.ParseResult) error {
 	// Restart EDS watch when the edsServiceName has changed.
-	if x.edsServiceName != config.EDSServiceName {
-		x.edsServiceName = config.EDSServiceName
+	newEDSToWatch := config.EDSServiceName
+	if newEDSToWatch == "" {
+		newEDSToWatch = config.ClusterName
+	}
+	if x.edsServiceName != newEDSToWatch {
+		x.edsServiceName = newEDSToWatch
 		x.startEndpointsWatch()
 	}
 	x.edsImpl.handleServiceConfig(config, raw)

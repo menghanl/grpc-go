@@ -127,6 +127,7 @@ func (edsImpl *edsBalancerImpl) handleEDSResponse(edsResp xdsclient.EndpointsUpd
 	childCfg, err := edsImpl.priorityConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
 		edsImpl.logger.Warningf("failed to parse generated priority balancer config, this should never happen because the config is generated: %v", err)
+		return // FIXME: handle the error here.
 	}
 	// FIXME: handle error
 	_ = edsImpl.child.UpdateClientConnState(balancer.ClientConnState{

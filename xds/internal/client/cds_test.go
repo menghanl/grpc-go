@@ -43,7 +43,7 @@ const (
 	serviceName = "service"
 )
 
-var emptyUpdate = ClusterUpdate{ServiceName: "", EnableLRS: false}
+var emptyUpdate = ClusterUpdate{ClusterName: "", EnableLRS: false}
 
 func (s) TestValidateCluster_Failure(t *testing.T) {
 	tests := []struct {
@@ -149,7 +149,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: false},
+			wantUpdate: ClusterUpdate{ClusterName: serviceName, EnableLRS: false},
 		},
 		{
 			name: "happiest-case",
@@ -171,7 +171,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
+			wantUpdate: ClusterUpdate{ClusterName: serviceName, EnableLRS: true},
 		},
 		{
 			name: "happiest-case-with-circuitbreakers",
@@ -205,7 +205,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
+			wantUpdate: ClusterUpdate{ClusterName: serviceName, EnableLRS: true, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
 		},
 	}
 
@@ -266,7 +266,7 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		},
 	}
 	wantUpdate := ClusterUpdate{
-		ServiceName: serviceName,
+		ClusterName: serviceName,
 		EnableLRS:   false,
 	}
 	gotUpdate, err := validateCluster(cluster)
@@ -655,7 +655,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ServiceName: serviceName,
+				ClusterName: serviceName,
 				EnableLRS:   false,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
@@ -704,7 +704,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ServiceName: serviceName,
+				ClusterName: serviceName,
 				EnableLRS:   false,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
@@ -769,7 +769,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ServiceName: serviceName,
+				ClusterName: serviceName,
 				EnableLRS:   false,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
@@ -932,7 +932,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			resources: []*anypb.Any{v2ClusterAny},
 			wantUpdate: map[string]ClusterUpdate{
 				v2ClusterName: {
-					ServiceName: v2Service, EnableLRS: true,
+					ClusterName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
 				},
 			},
@@ -946,7 +946,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			resources: []*anypb.Any{v3ClusterAny},
 			wantUpdate: map[string]ClusterUpdate{
 				v3ClusterName: {
-					ServiceName: v3Service, EnableLRS: true,
+					ClusterName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
 			},
@@ -960,11 +960,11 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			resources: []*anypb.Any{v2ClusterAny, v3ClusterAny},
 			wantUpdate: map[string]ClusterUpdate{
 				v2ClusterName: {
-					ServiceName: v2Service, EnableLRS: true,
+					ClusterName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
 				},
 				v3ClusterName: {
-					ServiceName: v3Service, EnableLRS: true,
+					ClusterName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
 			},
@@ -994,11 +994,11 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 			wantUpdate: map[string]ClusterUpdate{
 				v2ClusterName: {
-					ServiceName: v2Service, EnableLRS: true,
+					ClusterName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
 				},
 				v3ClusterName: {
-					ServiceName: v3Service, EnableLRS: true,
+					ClusterName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
 				"bad": {},
