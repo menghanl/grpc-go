@@ -19,7 +19,6 @@
 package balancerconfigbuilder
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -52,21 +51,12 @@ type PriorityConfig struct {
 
 // BuildPriorityConfigMarshalled blahblah.
 func BuildPriorityConfigMarshalled(priorities []PriorityConfig) ([]byte, []resolver.Address) {
-	// spew.Dump(edsResp)
-	// spew.Dump(cfg)
 	pc, addrs := buildPriorityConfig(priorities)
 	ret, err := json.Marshal(pc)
 	if err != nil {
-		panic(err.Error())
+		logger.Warningf("failed to marshal built priority config struct into json: %v", err)
+		return nil, nil
 	}
-
-	var prettyGot bytes.Buffer
-	if err := json.Indent(&prettyGot, ret, ">>> ", "  "); err != nil {
-		panic(err.Error())
-	}
-	// fmt.Println("\n\n", prettyGot.String())
-	// spew.Dump(addrs)
-
 	return ret, addrs
 }
 
@@ -86,7 +76,7 @@ func buildPriorityConfig(priorities []PriorityConfig) (*priority.LBConfig, []res
 						Name:   clusterimpl.Name,
 						Config: c,
 					},
-					// FIXME: set ignore-re-resolution to true.
+					// TODO: set ignore-re-resolution to true after #4275.
 				}
 			}
 			retAddrs = append(retAddrs, addrs...)
@@ -98,7 +88,7 @@ func buildPriorityConfig(priorities []PriorityConfig) (*priority.LBConfig, []res
 					Name:   clusterimpl.Name,
 					Config: config,
 				},
-				// FIXME: set ignore-re-resolution to false.
+				// TODO: set ignore-re-resolution to false after #4275.
 			}
 			retAddrs = append(retAddrs, addrs...)
 		}
@@ -109,7 +99,7 @@ func buildPriorityConfig(priorities []PriorityConfig) (*priority.LBConfig, []res
 func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string) (string, *clusterimpl.LBConfig, []resolver.Address) {
 	// TODO: support more endpoint picking policies and locality picking
 	// policies.
-	const childPolicy = roundrobin.Name
+	const childPolicy = "pick_first"
 
 	var retAddrs []resolver.Address
 	pName := fmt.Sprintf("priority-%v", parentPriority)
