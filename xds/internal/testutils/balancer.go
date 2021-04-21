@@ -149,6 +149,8 @@ func (tcc *TestClientConn) UpdateState(bs balancer.State) {
 	case <-tcc.NewPickerCh:
 	default:
 	}
+	// fmt.Printf(" ---- new picker: %#v\n", bs.Picker)
+	// debug.PrintStack()
 	tcc.NewPickerCh <- bs.Picker
 }
 

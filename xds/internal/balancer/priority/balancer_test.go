@@ -687,10 +687,10 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 func (s) TestPriority_InitTimeout(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func() func() {
-		old := defaultPriorityInitTimeout
-		defaultPriorityInitTimeout = testPriorityInitTimeout
+		old := DefaultPriorityInitTimeout
+		DefaultPriorityInitTimeout = testPriorityInitTimeout
 		return func() {
-			defaultPriorityInitTimeout = old
+			DefaultPriorityInitTimeout = old
 		}
 	}()()
 
@@ -757,10 +757,10 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func() func() {
-		old := defaultPriorityInitTimeout
-		defaultPriorityInitTimeout = testPriorityInitTimeout
+		old := DefaultPriorityInitTimeout
+		DefaultPriorityInitTimeout = testPriorityInitTimeout
 		return func() {
-			defaultPriorityInitTimeout = old
+			DefaultPriorityInitTimeout = old
 		}
 	}()()
 
@@ -1027,9 +1027,9 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 func (s) TestPriority_FirstPriorityUnavailable(t *testing.T) {
 	const testPriorityInitTimeout = time.Second
 	defer func(t time.Duration) {
-		defaultPriorityInitTimeout = t
-	}(defaultPriorityInitTimeout)
-	defaultPriorityInitTimeout = testPriorityInitTimeout
+		DefaultPriorityInitTimeout = t
+	}(DefaultPriorityInitTimeout)
+	DefaultPriorityInitTimeout = testPriorityInitTimeout
 
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)

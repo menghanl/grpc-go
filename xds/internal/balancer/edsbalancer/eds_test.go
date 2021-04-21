@@ -40,7 +40,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 
 	_ "google.golang.org/grpc/xds/internal/client/v2" // V2 client registration.
@@ -72,15 +71,13 @@ func init() {
 	balancer.Register(&edsBalancerBuilder{})
 }
 
-func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
-	return func() balancer.SubConn {
-		scst, _ := p.Pick(balancer.PickInfo{})
-		return scst.SubConn
-	}
-}
-
 type s struct {
 	grpctest.Tester
+}
+
+func (ss s) Teardown(t *testing.T) {
+	xdsclient.ClearAllCountersForTesting()
+	ss.Tester.Teardown(t)
 }
 
 func Test(t *testing.T) {
@@ -107,7 +104,7 @@ func (noopTestClientConn) Target() string { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn
-	state connectivity.State
+	state balancer.SubConnState
 }
 
 type fakeEDSBalancer struct {
@@ -120,27 +117,19 @@ type fakeEDSBalancer struct {
 	clusterName        *testutils.Channel
 }
 
-func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
+func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state balancer.SubConnState) {
 	f.subconnStateChange.Send(&scStateChange{sc: sc, state: state})
 }
 
-func (f *fakeEDSBalancer) handleChildPolicy(name string, config json.RawMessage) {
-	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
+func (f *fakeEDSBalancer) handleServiceConfig(cfg *EDSConfig, _ *serviceconfig.ParseResult) {
+	f.childPolicy.Send(cfg.ChildPolicy)
+	f.serviceName.Send(cfg.EDSServiceName)
+	f.serviceRequestMax.Send(cfg.MaxConcurrentRequests)
+	f.clusterName.Send(cfg.ClusterName)
 }
 
 func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
 	f.edsUpdate.Send(edsResp)
-}
-
-func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
-
-func (f *fakeEDSBalancer) updateServiceRequestsConfig(serviceName string, max *uint32) {
-	f.serviceName.Send(serviceName)
-	f.serviceRequestMax.Send(max)
-}
-
-func (f *fakeEDSBalancer) updateClusterName(name string) {
-	f.clusterName.Send(name)
 }
 
 func (f *fakeEDSBalancer) close() {}
@@ -261,7 +250,7 @@ func setup(edsLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 
 	origNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, _ balancer.BuildOptions, _ func(priorityType, balancer.State), _ load.PerClusterReporter, _ *grpclog.PrefixLogger) edsBalancerImplInterface {
+	newEDSBalancer = func(cc balancer.ClientConn, _ balancer.BuildOptions, _ func(balancer.State), _ *grpclog.PrefixLogger) edsBalancerImplInterface {
 		edsLB := newFakeEDSBalancer(cc)
 		defer func() { edsLBCh.Send(edsLB) }()
 		return edsLB
@@ -432,8 +421,8 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	xdsC.InvokeWatchEDSCallback(defaultEndpointsUpdate, nil)
 
 	fsc := &fakeSubConn{}
-	state := connectivity.Ready
-	edsB.UpdateSubConnState(fsc, balancer.SubConnState{ConnectivityState: state})
+	state := balancer.SubConnState{ConnectivityState: connectivity.Ready}
+	edsB.UpdateSubConnState(fsc, state)
 	if err := edsLB.waitForSubConnStateChange(ctx, &scStateChange{sc: fsc, state: state}); err != nil {
 		t.Fatal(err)
 	}

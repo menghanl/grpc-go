@@ -68,10 +68,11 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 
 	client, err := newXDSClient()
 	if err != nil {
-		b.logger.Errorf("failed to create xds-client: %v", err)
-		return nil
+		b.logger.Warningf("failed to create xds-client, load won't be reported: %v", err)
+	} else {
+		// Don't assign if err != nil, because client is a typed nil.
+		b.xdsC = client
 	}
-	b.xdsC = client
 	go b.run()
 
 	b.logger.Infof("Created")
@@ -313,7 +314,10 @@ func (cib *clusterImplBalancer) Close() {
 		cib.childLB.Close()
 		cib.childLB = nil
 	}
-	cib.xdsC.Close()
+	if cib.xdsC != nil {
+		fmt.Printf("closing, %v, %T, %v", cib.xdsC, cib.xdsC, cib.xdsC != nil)
+		cib.xdsC.Close()
+	}
 	cib.logger.Infof("Shutdown")
 }
 
