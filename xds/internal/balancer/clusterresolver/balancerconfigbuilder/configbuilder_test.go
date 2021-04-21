@@ -16,7 +16,7 @@
  *
  */
 
-package clusterresolver
+package balancerconfigbuilder
 
 import (
 	"fmt"
@@ -42,6 +42,10 @@ import (
 )
 
 const (
+	testClusterName     = "test-cluster-name"
+	testLRSServer       = "test-lrs-server"
+	testMaxRequests     = 314
+	testEDSServcie      = "test-eds-service-name"
 	testEDSServiceName  = "service-name-from-parent"
 	testDropCategory    = "test-drops"
 	testDropOverMillion = 1
@@ -173,16 +177,16 @@ func init() {
 // }
 
 func TestBuildPriorityConfig(t *testing.T) {
-	gotConfig, gotAddrs := buildPriorityConfig([]priorityConfig{
+	gotConfig, gotAddrs := buildPriorityConfig([]PriorityConfig{
 		{
-			mechanism: DiscoveryMechanism{
+			Mechanism: DiscoveryMechanism{
 				Cluster:                 testClusterName,
 				LoadReportingServerName: newString(testLRSServer),
 				MaxConcurrentRequests:   newUint32(testMaxRequests),
 				Type:                    DiscoveryMechanismTypeEDS,
 				EDSServiceName:          testEDSServiceName,
 			},
-			edsResp: xdsclient.EndpointsUpdate{
+			EDSResp: xdsclient.EndpointsUpdate{
 				Drops: []xdsclient.OverloadDropConfig{
 					{
 						Category:    testDropCategory,
@@ -199,10 +203,10 @@ func TestBuildPriorityConfig(t *testing.T) {
 			},
 		},
 		{
-			mechanism: DiscoveryMechanism{
+			Mechanism: DiscoveryMechanism{
 				Type: DiscoveryMechanismTypeLogicalDNS,
 			},
-			addresses: testAddressStrs[4],
+			Addresses: testAddressStrs[4],
 		},
 	})
 

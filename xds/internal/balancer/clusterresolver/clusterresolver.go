@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfigbuilder"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
@@ -136,7 +137,7 @@ func (crb *clusterResolverBalancer) run() {
 		case update := <-crb.grpcUpdate:
 			crb.handleGRPCUpdate(update)
 		case priorities := <-crb.resolver.updateCh:
-			cfgJSON, addrs := buildConfig(priorities)
+			cfgJSON, addrs := balancerconfigbuilder.BuildPriorityConfigMarshalled(priorities)
 			cfg, err := crb.priorityConfigParser.ParseConfig(cfgJSON)
 			if err != nil {
 				crb.logger.Warningf("failed to parse generated priority balancer config, this should never happen because the config is generated: %v", err)

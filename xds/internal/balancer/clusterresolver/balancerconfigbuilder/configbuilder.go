@@ -16,7 +16,7 @@
  *
  */
 
-package clusterresolver
+package balancerconfigbuilder
 
 import (
 	"bytes"
@@ -38,19 +38,20 @@ import (
 
 const million = 1000000
 
-// priorityConfig is config for one priority. For example, if there an EDS and a
-// DNS, the priority list will be [priorityConfig{EDS}, priorityConfig{DNS}].
+// PriorityConfig is config for one priority. For example, if there an EDS and a
+// DNS, the priority list will be [priorityConfig{EDS}, PriorityConfig{DNS}].
 //
-// Each priorityConfig corresponds to one discovery mechanism from the LBConfig.
-type priorityConfig struct {
-	mechanism DiscoveryMechanism
-	// edsResp if type is EDS.
-	edsResp xdsclient.EndpointsUpdate
-	// addresses if type is DNS.
-	addresses []string
+// Each PriorityConfig corresponds to one discovery mechanism from the LBConfig.
+type PriorityConfig struct {
+	Mechanism DiscoveryMechanism
+	// EDSResp if type is EDS.
+	EDSResp xdsclient.EndpointsUpdate
+	// Addresses if type is DNS.
+	Addresses []string
 }
 
-func buildConfig(priorities []priorityConfig) ([]byte, []resolver.Address) {
+// BuildPriorityConfigMarshalled blahblah.
+func BuildPriorityConfigMarshalled(priorities []PriorityConfig) ([]byte, []resolver.Address) {
 	// spew.Dump(edsResp)
 	// spew.Dump(cfg)
 	pc, addrs := buildPriorityConfig(priorities)
@@ -69,15 +70,15 @@ func buildConfig(priorities []priorityConfig) ([]byte, []resolver.Address) {
 	return ret, addrs
 }
 
-func buildPriorityConfig(priorities []priorityConfig) (*priority.LBConfig, []resolver.Address) {
+func buildPriorityConfig(priorities []PriorityConfig) (*priority.LBConfig, []resolver.Address) {
 	var (
 		retConfig = &priority.LBConfig{Children: make(map[string]*priority.Child)}
 		retAddrs  []resolver.Address
 	)
 	for i, p := range priorities {
-		switch p.mechanism.Type {
+		switch p.Mechanism.Type {
 		case DiscoveryMechanismTypeEDS:
-			names, configs, addrs := buildClusterImplConfigForEDS(i, p.edsResp, p.mechanism)
+			names, configs, addrs := buildClusterImplConfigForEDS(i, p.EDSResp, p.Mechanism)
 			retConfig.Priorities = append(retConfig.Priorities, names...)
 			for n, c := range configs {
 				retConfig.Children[n] = &priority.Child{
@@ -90,7 +91,7 @@ func buildPriorityConfig(priorities []priorityConfig) (*priority.LBConfig, []res
 			}
 			retAddrs = append(retAddrs, addrs...)
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, addrs := buildClusterImplConfigForDNS(i, p.addresses)
+			name, config, addrs := buildClusterImplConfigForDNS(i, p.Addresses)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retConfig.Children[name] = &priority.Child{
 				Config: &internalserviceconfig.BalancerConfig{

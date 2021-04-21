@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfigbuilder"
 )
 
 const (
@@ -82,12 +83,12 @@ func TestParseConfig(t *testing.T) {
 			name: "OK with one discovery mechanism",
 			js:   testJSONConfig1,
 			want: &LBConfig{
-				DiscoveryMechanisms: []DiscoveryMechanism{
+				DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{
 					{
 						Cluster:                 testClusterName,
 						LoadReportingServerName: newString(testLRSServer),
 						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
+						Type:                    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
 						EDSServiceName:          testEDSServcie,
 					},
 				},
@@ -100,16 +101,16 @@ func TestParseConfig(t *testing.T) {
 			name: "OK with multiple discovery mechanisms",
 			js:   testJSONConfig2,
 			want: &LBConfig{
-				DiscoveryMechanisms: []DiscoveryMechanism{
+				DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{
 					{
 						Cluster:                 testClusterName,
 						LoadReportingServerName: newString(testLRSServer),
 						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
+						Type:                    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
 						EDSServiceName:          testEDSServcie,
 					},
 					{
-						Type: DiscoveryMechanismTypeLogicalDNS,
+						Type: balancerconfigbuilder.DiscoveryMechanismTypeLogicalDNS,
 					},
 				},
 				LocalityPickingPolicy: nil,
@@ -121,12 +122,12 @@ func TestParseConfig(t *testing.T) {
 			name: "OK with picking policy override",
 			js:   testJSONConfig3,
 			want: &LBConfig{
-				DiscoveryMechanisms: []DiscoveryMechanism{
+				DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{
 					{
 						Cluster:                 testClusterName,
 						LoadReportingServerName: newString(testLRSServer),
 						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
+						Type:                    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
 						EDSServiceName:          testEDSServcie,
 					},
 				},
@@ -159,17 +160,17 @@ func TestParseConfig(t *testing.T) {
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
 	tests := []struct {
 		name string
-		typ  DiscoveryMechanismType
+		typ  balancerconfigbuilder.DiscoveryMechanismType
 		want string
 	}{
 		{
 			name: "eds",
-			typ:  DiscoveryMechanismTypeEDS,
+			typ:  balancerconfigbuilder.DiscoveryMechanismTypeEDS,
 			want: `"EDS"`,
 		},
 		{
 			name: "dns",
-			typ:  DiscoveryMechanismTypeLogicalDNS,
+			typ:  balancerconfigbuilder.DiscoveryMechanismTypeLogicalDNS,
 			want: `"LOGICAL_DNS"`,
 		},
 	}
@@ -190,18 +191,18 @@ func TestDiscoveryMechanismTypeUnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
-		want    DiscoveryMechanismType
+		want    balancerconfigbuilder.DiscoveryMechanismType
 		wantErr bool
 	}{
 		{
 			name: "eds",
 			js:   `"EDS"`,
-			want: DiscoveryMechanismTypeEDS,
+			want: balancerconfigbuilder.DiscoveryMechanismTypeEDS,
 		},
 		{
 			name: "dns",
 			js:   `"LOGICAL_DNS"`,
-			want: DiscoveryMechanismTypeLogicalDNS,
+			want: balancerconfigbuilder.DiscoveryMechanismTypeLogicalDNS,
 		},
 		{
 			name:    "error",
@@ -211,7 +212,7 @@ func TestDiscoveryMechanismTypeUnmarshalJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var got DiscoveryMechanismType
+			var got balancerconfigbuilder.DiscoveryMechanismType
 			err := json.Unmarshal([]byte(tt.js), &got)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
@@ -224,10 +225,10 @@ func TestDiscoveryMechanismTypeUnmarshalJSON(t *testing.T) {
 	}
 }
 
-// func newString(s string) *string {
-// 	return &s
-// }
-//
-// func newUint32(i uint32) *uint32 {
-// 	return &i
-// }
+func newString(s string) *string {
+	return &s
+}
+
+func newUint32(i uint32) *uint32 {
+	return &i
+}
