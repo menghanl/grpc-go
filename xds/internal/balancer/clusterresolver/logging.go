@@ -1,5 +1,6 @@
 /*
- * Copyright 2019 gRPC authors.
+ *
+ * Copyright 2020 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,33 +13,22 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
-	"google.golang.org/grpc/internal/wrr"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"fmt"
+
+	"google.golang.org/grpc/grpclog"
+	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-var newRandomWRR = wrr.NewRandom
+const prefix = "[cluster-resolver-lb %p] "
 
-type dropper struct {
-	c xdsclient.OverloadDropConfig
-	w wrr.WRR
-}
+var logger = grpclog.Component("xds")
 
-func newDropper(c xdsclient.OverloadDropConfig) *dropper {
-	w := newRandomWRR()
-	w.Add(true, int64(c.Numerator))
-	w.Add(false, int64(c.Denominator-c.Numerator))
-
-	return &dropper{
-		c: c,
-		w: w,
-	}
-}
-
-func (d *dropper) drop() (ret bool) {
-	return d.w.Next().(bool)
+func prefixLogger(p *clusterResolverBalancer) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }
