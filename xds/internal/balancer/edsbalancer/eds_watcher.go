@@ -25,6 +25,15 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
+// watchUpdate wraps the information received from a registered EDS watcher. A
+// non-nil error is propagated to the underlying child balancer. A valid update
+// results in creating a new child balancer (priority balancer, if one doesn't
+// already exist) and pushing the updated balancer config to it.
+type watchUpdate struct {
+	eds xdsclient.EndpointsUpdate
+	err error
+}
+
 // edsWatcher takes an EDS balancer config, and use the xds_client to watch EDS
 // updates. The EDS updates are passed back to the balancer via a channel.
 type edsWatcher struct {
