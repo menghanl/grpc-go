@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"context"
@@ -32,9 +32,11 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfigbuilder"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -66,16 +68,21 @@ func setupTestEDS(t *testing.T) (balancer.Balancer, *testutils.TestClientConn, *
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	cc := testutils.NewTestClientConn(t)
-	builder := balancer.Get(edsName)
-	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	builder := balancer.Get(Name)
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsb == nil {
 		newXDSClient = oldNewXDSClient
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +107,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
 	sc1 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -114,7 +121,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// The same locality, add one more backend.
 	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:2], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab2.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab2.Build()), nil)
 
 	sc2 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -128,7 +135,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// The same locality, delete first backend.
 	clab3 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[1:2], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab3.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab3.Build()), nil)
 
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
@@ -144,7 +151,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// The same locality, replace backend.
 	clab4 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab4.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab4.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab4.Build()), nil)
 
 	sc3 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -163,7 +170,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// The same locality, different drop rate, dropping 50%.
 	clab5 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], map[string]uint32{"test-drop": 50})
 	clab5.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab5.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab5.Build()), nil)
 
 	// Picks with drops.
 	if err := testPickerFromCh(cc.NewPickerCh, func(p balancer.Picker) error {
@@ -185,7 +192,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	// The same locality, remove drops.
 	clab6 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab6.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab6.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab6.Build()), nil)
 
 	// Pick without drops.
 	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc3}); err != nil {
@@ -206,7 +213,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// Two localities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	sc1 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -215,7 +222,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	// locality. Otherwise the test is flaky because of a map is used in EDS to
 	// keep localities.
 	clab1.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	sc2 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -230,7 +237,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab2.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab2.Build()), nil)
 
 	sc3 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -245,7 +252,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	clab3 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	clab3.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab3.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab3.Build()), nil)
 
 	scToRemove := <-cc.RemoveSubConnCh
 	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
@@ -262,7 +269,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	clab4 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab4.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	clab4.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab4.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab4.Build()), nil)
 
 	sc4 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -281,7 +288,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	clab5 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab5.AddLocality(testSubZones[1], 2, 0, testEndpointAddrs[1:2], nil)
 	clab5.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab5.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab5.Build()), nil)
 
 	// Test pick with two subconns different locality weight.
 	//
@@ -296,7 +303,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	clab6 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab6.AddLocality(testSubZones[1], 0, 0, testEndpointAddrs[1:2], nil)
 	clab6.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab6.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab6.Build()), nil)
 
 	// Changing weight of locality[1] to 0 caused it to be removed. It's subconn
 	// should also be removed.
@@ -346,7 +353,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 			corepb.HealthStatus_DEGRADED,
 		},
 	})
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
 	var (
 		readySCs           []balancer.SubConn
@@ -403,7 +410,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	defer func() { balancergroup.DefaultSubBalancerCloseTimeout = oldCacheTimeout }()
 
 	// The first update is an empty update.
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, nil)
 	// Pick should fail with transient failure, and all priority removed error.
 	if err := testErrPickerFromCh(cc.NewPickerCh, errAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
@@ -412,7 +419,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
 	sc1 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -423,7 +430,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, nil)
 	// Pick should fail with transient failure, and all priority removed error.
 	if err := testErrPickerFromCh(cc.NewPickerCh, errAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
@@ -435,7 +442,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	time.Sleep(cacheTimeout * 2)
 
 	// Handle another update with priorities and localities.
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
 	sc2 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
@@ -455,10 +462,17 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
-			if len(s.ResolverState.Addresses) == 0 {
-				return nil
+			m, _ := bd.Data.(map[string]bool)
+			if m == nil {
+				m = make(map[string]bool)
+				bd.Data = m
 			}
-			bd.ClientConn.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			for _, addr := range s.ResolverState.Addresses {
+				if !m[addr.Addr] {
+					m[addr.Addr] = true
+					bd.ClientConn.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
+				}
+			}
 			return nil
 		},
 		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
@@ -474,7 +488,15 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to stub-balancer")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: balancerName}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: balancerName,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +505,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab1.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
 	for i := 0; i < 2; i++ {
 		sc := <-cc.NewSubConnCh
@@ -496,7 +518,15 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to round-robin")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: roundrobin.Name}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -518,7 +548,15 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to stub-balancer")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: balancerName}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: balancerName,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +581,15 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to round-robin")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: roundrobin.Name}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -570,10 +616,15 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 
 	var maxRequests uint32 = 50
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           &loadBalancingConfig{Name: roundrobin.Name},
-			ClusterName:           testClusterName,
-			MaxConcurrentRequests: &maxRequests,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster:               testClusterName,
+				MaxConcurrentRequests: &maxRequests,
+				Type:                  balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -582,7 +633,7 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
-	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
+	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	sc1 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -631,10 +682,15 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	// update afterwards). Make sure the new picker uses the new configs.
 	var maxRequests2 uint32 = 10
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           &loadBalancingConfig{Name: roundrobin.Name},
-			ClusterName:           testClusterName,
-			MaxConcurrentRequests: &maxRequests2,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{{
+				Cluster:               testClusterName,
+				MaxConcurrentRequests: &maxRequests2,
+				Type:                  balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
 		},
 	}); err != nil {
 		t.Fatal(err)

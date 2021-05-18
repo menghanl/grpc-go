@@ -36,7 +36,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfigbuilder"
 	"google.golang.org/grpc/xds/internal/client"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -196,13 +197,19 @@ func cdsCCS(cluster string) balancer.ClientConnState {
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
 func edsCCS(service string, countMax *uint32, enableLRS bool) balancer.ClientConnState {
-	lbCfg := &edsbalancer.EDSConfig{
-		ClusterName:           service,
+	discoveryMechanism := balancerconfigbuilder.DiscoveryMechanism{
+		Type:                  balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+		Cluster:               service,
 		MaxConcurrentRequests: countMax,
 	}
 	if enableLRS {
-		lbCfg.LrsLoadReportingServerName = new(string)
+		discoveryMechanism.LoadReportingServerName = new(string)
+
 	}
+	lbCfg := &clusterresolver.LBConfig{
+		DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{discoveryMechanism},
+	}
+
 	return balancer.ClientConnState{
 		BalancerConfig: lbCfg,
 	}

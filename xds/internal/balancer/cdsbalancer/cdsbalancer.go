@@ -34,7 +34,8 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfigbuilder"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 )
@@ -347,8 +348,10 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		b.edsLB = edsLB
 		b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
 	}
-	lbCfg := &edsbalancer.EDSConfig{
-		ClusterName:           update.cds.ClusterName,
+
+	discoveryMechanism := balancerconfigbuilder.DiscoveryMechanism{
+		Type:                  balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+		Cluster:               update.cds.ClusterName,
 		EDSServiceName:        update.cds.EDSServiceName,
 		MaxConcurrentRequests: update.cds.MaxRequests,
 	}
@@ -356,9 +359,13 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		// An empty string here indicates that the edsBalancer should use the
 		// same xDS server for load reporting as it does for EDS
 		// requests/responses.
-		lbCfg.LrsLoadReportingServerName = new(string)
+		discoveryMechanism.LoadReportingServerName = new(string)
 
 	}
+	lbCfg := &clusterresolver.LBConfig{
+		DiscoveryMechanisms: []balancerconfigbuilder.DiscoveryMechanism{discoveryMechanism},
+	}
+
 	ccState := balancer.ClientConnState{
 		BalancerConfig: lbCfg,
 	}

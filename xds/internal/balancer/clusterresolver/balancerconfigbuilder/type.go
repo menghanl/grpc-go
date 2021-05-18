@@ -74,6 +74,8 @@ func (t *DiscoveryMechanismType) UnmarshalJSON(b []byte) error {
 // For EDS, if EDSServiceName is not empty, it will be used for watching. If
 // EDSServiceName is empty, Cluster will be used.
 type DiscoveryMechanism struct {
+	// Type is the discovery mechanism type.
+	Type DiscoveryMechanismType `json:"type,omitempty"`
 	// Cluster is the cluster name.
 	Cluster string `json:"cluster,omitempty"`
 	// LoadReportingServerName is the LRS server to send load reports to. If
@@ -84,14 +86,15 @@ type DiscoveryMechanism struct {
 	// MaxConcurrentRequests is the maximum number of outstanding requests can
 	// be made to the upstream cluster. Default is 1024.
 	MaxConcurrentRequests *uint32 `json:"maxConcurrentRequests,omitempty"`
-	// Type is the discovery mechanism type.
-	Type DiscoveryMechanismType `json:"type,omitempty"`
 	// EDSServiceName is the EDS service name, as returned in CDS. May be unset
 	// if not specified in CDS. For type EDS only.
 	//
 	// This is used for EDS watch if set. If unset, Cluster is used for EDS
 	// watch.
 	EDSServiceName string `json:"edsServiceName,omitempty"`
+	// DNSHostname is the DNS name to resolve in "host:port" form. For type
+	// LOGICAL_DNS only.
+	DNSHostname string `json:"dnsHostname,omitempty"`
 }
 
 var logger = grpclog.Component("xds")
