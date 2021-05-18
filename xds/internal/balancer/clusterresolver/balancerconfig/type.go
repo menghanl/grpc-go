@@ -29,17 +29,17 @@ type DiscoveryMechanismType int
 
 const (
 	// DiscoveryMechanismTypeEDS is eds.
-	DiscoveryMechanismTypeEDS DiscoveryMechanismType = iota // `json:EDS`
+	DiscoveryMechanismTypeEDS DiscoveryMechanismType = iota // `json:"EDS"`
 	// DiscoveryMechanismTypeLogicalDNS is DNS.
-	DiscoveryMechanismTypeLogicalDNS // `json:LOGICAL_DNS`
+	DiscoveryMechanismTypeLogicalDNS // `json:"LOGICAL_DNS"`
 )
 
 // MarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
 //
 // This is necessary to handle enum (as strings) from JSON.
-func (t *DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
+func (t DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
-	switch *t {
+	switch t {
 	case DiscoveryMechanismTypeEDS:
 		buffer.WriteString("EDS")
 	case DiscoveryMechanismTypeLogicalDNS:
@@ -92,4 +92,7 @@ type DiscoveryMechanism struct {
 	// This is used for EDS watch if set. If unset, Cluster is used for EDS
 	// watch.
 	EDSServiceName string `json:"edsServiceName,omitempty"`
+	// DNSHostname is the DNS name to resolve in "host:port" form. For type
+	// LOGICAL_DNS only.
+	DNSHostname string `json:"dnsHostname,omitempty"`
 }
