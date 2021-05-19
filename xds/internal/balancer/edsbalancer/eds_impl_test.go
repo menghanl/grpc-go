@@ -453,7 +453,6 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	const balancerName = "stubBalancer-TestEDS_UpdateSubBalancerName"
 
-	cc := testutils.NewTestClientConn(t)
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
 			if len(s.ResolverState.Addresses) == 0 {

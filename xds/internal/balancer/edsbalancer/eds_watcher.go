@@ -19,8 +19,6 @@
 package edsbalancer
 
 import (
-	"sync"
-
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
@@ -42,7 +40,6 @@ type edsWatcher struct {
 
 	updateChannel chan *watchUpdate
 
-	mu         sync.Mutex
 	edsToWatch string
 	edsCancel  func()
 }

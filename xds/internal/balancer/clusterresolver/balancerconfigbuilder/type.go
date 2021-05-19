@@ -36,7 +36,7 @@ const (
 	DiscoveryMechanismTypeLogicalDNS // `json:LOGICAL_DNS`
 )
 
-// UnmarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
+// MarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
 func (t DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
 	switch t {
@@ -75,7 +75,7 @@ func (t *DiscoveryMechanismType) UnmarshalJSON(b []byte) error {
 // EDSServiceName is empty, Cluster will be used.
 type DiscoveryMechanism struct {
 	// Cluster is the cluster name.
-	Cluster string `json:cluster,omitempty"`
+	Cluster string `json:"cluster,omitempty"`
 	// LoadReportingServerName is the LRS server to send load reports to. If
 	// not present, load reporting will be disabled. If set to the empty string,
 	// load reporting will be sent to the same server that we obtained CDS data
