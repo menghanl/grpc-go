@@ -114,19 +114,19 @@ func newTestClientConn() *testClientConn {
 func (s) TestResolverBuilder(t *testing.T) {
 	tests := []struct {
 		name          string
-		xdsClientFunc func() (xdsclient.Interface, error)
+		xdsClientFunc func() (xdsclient.XDSClient, error)
 		wantErr       bool
 	}{
 		{
 			name: "simple-good",
-			xdsClientFunc: func() (xdsclient.Interface, error) {
+			xdsClientFunc: func() (xdsclient.XDSClient, error) {
 				return fakeclient.NewClient(), nil
 			},
 			wantErr: false,
 		},
 		{
 			name: "newXDSClient-throws-error",
-			xdsClientFunc: func() (xdsclient.Interface, error) {
+			xdsClientFunc: func() (xdsclient.XDSClient, error) {
 				return nil, errors.New("newXDSClient-throws-error")
 			},
 			wantErr: true,
@@ -167,7 +167,7 @@ func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 	// Fake out the xdsClient creation process by providing a fake, which does
 	// not have any certificate provider configuration.
 	oldClientMaker := newXDSClient
-	newXDSClient = func() (xdsclient.Interface, error) {
+	newXDSClient = func() (xdsclient.XDSClient, error) {
 		fc := fakeclient.NewClient()
 		fc.SetBootstrapConfig(&bootstrap.Config{})
 		return fc, nil
@@ -194,7 +194,7 @@ func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 }
 
 type setupOpts struct {
-	xdsClientFunc func() (xdsclient.Interface, error)
+	xdsClientFunc func() (xdsclient.XDSClient, error)
 }
 
 func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
@@ -254,7 +254,7 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 
@@ -286,7 +286,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -312,7 +312,7 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -446,7 +446,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 	defer xdsR.Close()
@@ -506,7 +506,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 	defer xdsR.Close()
@@ -614,7 +614,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -675,7 +675,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	defer func(old bool) { env.TimeoutSupport = old }(env.TimeoutSupport)
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -778,7 +778,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -927,7 +927,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -981,7 +981,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -1027,7 +1027,7 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -1202,7 +1202,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			xdsC := fakeclient.NewClient()
 			xdsR, tcc, cancel := testSetup(t, setupOpts{
-				xdsClientFunc: func() (xdsclient.Interface, error) { return xdsC, nil },
+				xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 			})
 			defer xdsR.Close()
 			defer cancel()

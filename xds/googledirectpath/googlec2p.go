@@ -65,7 +65,7 @@ const (
 var (
 	onGCE = googlecloud.OnGCE
 
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.Interface, error) {
+	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, error) {
 		return xdsclient.NewWithConfig(config)
 	}
 
@@ -134,7 +134,7 @@ func (c2pResolverBuilder) Scheme() string {
 
 type c2pResolver struct {
 	resolver.Resolver
-	client xdsclient.Interface
+	client xdsclient.XDSClient
 }
 
 func (r *c2pResolver) Close() {
