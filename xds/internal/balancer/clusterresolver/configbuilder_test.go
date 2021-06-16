@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
@@ -632,6 +633,131 @@ func TestDedupSortedIntSlice(t *testing.T) {
 	}
 }
 
+func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
+	tests := []struct {
+		name         string
+		localities   []xdsclient.Locality
+		priorityName string
+		mechanism    DiscoveryMechanism
+		childPolicy  *internalserviceconfig.BalancerConfig
+		wantConfig   *clusterimpl.LBConfig
+		wantAddrs    []resolver.Address
+	}{{
+		name: "round robin as child, no LRS",
+		localities: []xdsclient.Locality{
+			{
+				Endpoints: []xdsclient.Endpoint{
+					{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+					{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+				},
+				ID:     internal.LocalityID{Zone: "test-zone-1"},
+				Weight: 20,
+			},
+			{
+				Endpoints: []xdsclient.Endpoint{
+					{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+					{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+				},
+				ID:     internal.LocalityID{Zone: "test-zone-2"},
+				Weight: 80,
+			},
+		},
+		priorityName: "test-priority",
+		childPolicy:  &internalserviceconfig.BalancerConfig{Name: rrName},
+		mechanism: DiscoveryMechanism{
+			Cluster:        testClusterName,
+			Type:           DiscoveryMechanismTypeEDS,
+			EDSServiceName: testEDSServcie,
+		},
+		// lrsServer is nil, so LRS policy will not be used.
+		wantConfig: &clusterimpl.LBConfig{
+			Cluster:        testClusterName,
+			EDSServiceName: testEDSServcie,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: weightedtarget.Name,
+				Config: &weightedtarget.LBConfig{
+					Targets: map[string]weightedtarget.Target{
+						assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString): {
+							Weight: 20,
+							ChildPolicy: &internalserviceconfig.BalancerConfig{
+								Name: roundrobin.Name,
+							},
+						},
+						assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString): {
+							Weight: 80,
+							ChildPolicy: &internalserviceconfig.BalancerConfig{
+								Name: roundrobin.Name,
+							},
+						},
+					},
+				},
+			},
+		},
+		wantAddrs: []resolver.Address{
+			hierarchy.Set(resolver.Address{Addr: "addr-1-1"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+			hierarchy.Set(resolver.Address{Addr: "addr-1-2"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+			hierarchy.Set(resolver.Address{Addr: "addr-2-1"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+			hierarchy.Set(resolver.Address{Addr: "addr-2-2"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+		},
+	},
+		{
+			name: "ring_hash as child",
+			localities: []xdsclient.Locality{
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					},
+					ID:     internal.LocalityID{Zone: "test-zone-1"},
+					Weight: 20,
+				},
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					},
+					ID:     internal.LocalityID{Zone: "test-zone-2"},
+					Weight: 80,
+				},
+			},
+			priorityName: "test-priority",
+			childPolicy:  &internalserviceconfig.BalancerConfig{Name: rhName, Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2}},
+			// lrsServer is nil, so LRS policy will not be used.
+			wantConfig: &clusterimpl.LBConfig{
+				ChildPolicy: &internalserviceconfig.BalancerConfig{
+					Name:   ringhash.Name,
+					Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2},
+				},
+			},
+			wantAddrs: []resolver.Address{
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-1"}, weightedroundrobin.AddrInfo{Weight: 1800}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-2"}, weightedroundrobin.AddrInfo{Weight: 200}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-1"}, weightedroundrobin.AddrInfo{Weight: 7200}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-2"}, weightedroundrobin.AddrInfo{Weight: 800}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got1 := priorityLocalitiesToClusterImpl(tt.localities, tt.priorityName, tt.mechanism, nil, tt.childPolicy)
+			if diff := cmp.Diff(got, tt.wantConfig); diff != "" {
+				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			}
+			if diff := cmp.Diff(got1, tt.wantAddrs, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			}
+		})
+	}
+}
+
 func TestLocalitiesToWeightedTarget(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -814,6 +940,133 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
 			}
 			if diff := cmp.Diff(got1, tt.wantAddrs, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
+				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
+			}
+		})
+	}
+}
+
+func TestLocalitiesToRingHash(t *testing.T) {
+	tests := []struct {
+		name         string
+		localities   []xdsclient.Locality
+		priorityName string
+		wantAddrs    []resolver.Address
+	}{
+		{
+			// Check that address weights are locality_weight * endpoint_weight.
+			name: "with locality and endpoint weight",
+			localities: []xdsclient.Locality{
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					},
+					ID:     internal.LocalityID{Zone: "test-zone-1"},
+					Weight: 20,
+				},
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					},
+					ID:     internal.LocalityID{Zone: "test-zone-2"},
+					Weight: 80,
+				},
+			},
+			priorityName: "test-priority",
+			wantAddrs: []resolver.Address{
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-1"}, weightedroundrobin.AddrInfo{Weight: 1800}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-2"}, weightedroundrobin.AddrInfo{Weight: 200}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-1"}, weightedroundrobin.AddrInfo{Weight: 7200}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-2"}, weightedroundrobin.AddrInfo{Weight: 800}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+			},
+		},
+		{
+			// Check that endpoint_weight is 0, weight is the locality weight.
+			name: "locality weight only",
+			localities: []xdsclient.Locality{
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					},
+					ID:     internal.LocalityID{Zone: "test-zone-1"},
+					Weight: 20,
+				},
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					},
+					ID:     internal.LocalityID{Zone: "test-zone-2"},
+					Weight: 80,
+				},
+			},
+			priorityName: "test-priority",
+			wantAddrs: []resolver.Address{
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-1"}, weightedroundrobin.AddrInfo{Weight: 20}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-2"}, weightedroundrobin.AddrInfo{Weight: 20}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-1"}, weightedroundrobin.AddrInfo{Weight: 80}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-2"}, weightedroundrobin.AddrInfo{Weight: 80}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+			},
+		},
+		{
+			// Check that locality_weight is 0, weight is the endpoint weight.
+			name: "endpoint weight only",
+			localities: []xdsclient.Locality{
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					},
+					ID: internal.LocalityID{Zone: "test-zone-1"},
+				},
+				{
+					Endpoints: []xdsclient.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					},
+					ID: internal.LocalityID{Zone: "test-zone-2"},
+				},
+			},
+			priorityName: "test-priority",
+			wantAddrs: []resolver.Address{
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-1"}, weightedroundrobin.AddrInfo{Weight: 90}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-2"}, weightedroundrobin.AddrInfo{Weight: 10}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-1"}, weightedroundrobin.AddrInfo{Weight: 90}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				hierarchy.Set(
+					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-2"}, weightedroundrobin.AddrInfo{Weight: 10}),
+					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := localitiesToRingHash(tt.localities, tt.priorityName)
+			if diff := cmp.Diff(got, tt.wantAddrs, cmp.AllowUnexported(attributes.Attributes{})); diff != "" {
 				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
 			}
 		})
