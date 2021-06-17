@@ -110,7 +110,7 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	}
 	b.config = newConfig
 
-	// Addresses and sub-balancer config are sent to sub-balancer.
+	// addresses and sub-balancer config are sent to sub-balancer.
 	return b.lb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
 		BalancerConfig: b.config.ChildPolicy.Config,

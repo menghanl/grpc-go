@@ -16,7 +16,7 @@
  *
  */
 
-package balancerconfig
+package clusterresolver
 
 import (
 	"bytes"
@@ -42,10 +42,8 @@ import (
 )
 
 const (
-	testClusterName     = "test-cluster-name"
 	testLRSServer       = "test-lrs-server"
 	testMaxRequests     = 314
-	testEDSServcie      = "test-eds-service-name"
 	testEDSServiceName  = "service-name-from-parent"
 	testDropCategory    = "test-drops"
 	testDropOverMillion = 1
@@ -124,16 +122,16 @@ func init() {
 // TestBuildPriorityConfigJSON is a sanity check that the built balancer config
 // can be parsed. The behavior test is covered by TestBuildPriorityConfig.
 func TestBuildPriorityConfigJSON(t *testing.T) {
-	gotConfig, _, err := BuildPriorityConfigJSON([]PriorityConfig{
+	gotConfig, _, err := buildPriorityConfigJSON([]priorityConfig{
 		{
-			Mechanism: DiscoveryMechanism{
+			mechanism: DiscoveryMechanism{
 				Cluster:                 testClusterName,
 				LoadReportingServerName: newString(testLRSServer),
 				MaxConcurrentRequests:   newUint32(testMaxRequests),
 				Type:                    DiscoveryMechanismTypeEDS,
 				EDSServiceName:          testEDSServiceName,
 			},
-			EDSResp: xdsclient.EndpointsUpdate{
+			edsResp: xdsclient.EndpointsUpdate{
 				Drops: []xdsclient.OverloadDropConfig{
 					{
 						Category:    testDropCategory,
@@ -150,10 +148,10 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 			},
 		},
 		{
-			Mechanism: DiscoveryMechanism{
+			mechanism: DiscoveryMechanism{
 				Type: DiscoveryMechanismTypeLogicalDNS,
 			},
-			Addresses: testAddressStrs[4],
+			addresses: testAddressStrs[4],
 		},
 	}, nil)
 	if err != nil {
@@ -174,16 +172,16 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 }
 
 func TestBuildPriorityConfig(t *testing.T) {
-	gotConfig, gotAddrs := buildPriorityConfig([]PriorityConfig{
+	gotConfig, gotAddrs := buildPriorityConfig([]priorityConfig{
 		{
-			Mechanism: DiscoveryMechanism{
+			mechanism: DiscoveryMechanism{
 				Cluster:                 testClusterName,
 				LoadReportingServerName: newString(testLRSServer),
 				MaxConcurrentRequests:   newUint32(testMaxRequests),
 				Type:                    DiscoveryMechanismTypeEDS,
 				EDSServiceName:          testEDSServiceName,
 			},
-			EDSResp: xdsclient.EndpointsUpdate{
+			edsResp: xdsclient.EndpointsUpdate{
 				Drops: []xdsclient.OverloadDropConfig{
 					{
 						Category:    testDropCategory,
@@ -200,10 +198,10 @@ func TestBuildPriorityConfig(t *testing.T) {
 			},
 		},
 		{
-			Mechanism: DiscoveryMechanism{
+			mechanism: DiscoveryMechanism{
 				Type: DiscoveryMechanismTypeLogicalDNS,
 			},
-			Addresses: testAddressStrs[4],
+			addresses: testAddressStrs[4],
 		},
 	}, nil)
 
@@ -820,14 +818,6 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 			}
 		})
 	}
-}
-
-func newString(s string) *string {
-	return &s
-}
-
-func newUint32(i uint32) *uint32 {
-	return &i
 }
 
 func assertString(f func() (string, error)) string {
