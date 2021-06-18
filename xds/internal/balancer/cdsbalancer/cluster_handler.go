@@ -32,6 +32,9 @@ var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a 
 type clusterHandlerUpdate struct {
 	// securityCfg is the Security Config from the top (root) cluster.
 	securityCfg *xdsclient.SecurityConfig
+	// lbPolicy is the lb policy from the top (root) cluster.
+	lbPolicy *xdsclient.ClusterLBPolicyRingHash
+
 	// chu is a list of ClusterUpdates from all the leaf clusters.
 	chu []xdsclient.ClusterUpdate
 	err error
@@ -101,6 +104,7 @@ func (ch *clusterHandler) constructClusterUpdate() {
 	}
 	ch.updateChannel <- clusterHandlerUpdate{
 		securityCfg: ch.root.clusterUpdate.SecurityCfg,
+		lbPolicy:    ch.root.clusterUpdate.LBPolicy,
 		chu:         clusterUpdate,
 	}
 }
