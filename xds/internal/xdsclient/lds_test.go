@@ -1262,6 +1262,9 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			}
 			if diff := cmp.Diff(gotUpdate, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
+				t.Errorf("%+v", gotUpdate[v3LDSTarget].InboundListenerCfg.FilterChains)
+				t.Errorf("%+v", test.wantUpdate[v3LDSTarget].InboundListenerCfg.FilterChains)
+				t.Errorf("%+v", gotUpdate[v3LDSTarget].InboundListenerCfg.FilterChains.Equal(test.wantUpdate[v3LDSTarget].InboundListenerCfg.FilterChains))
 			}
 			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
 				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
