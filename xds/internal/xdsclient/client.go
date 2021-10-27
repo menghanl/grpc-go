@@ -32,13 +32,13 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -105,11 +105,11 @@ type APIClientBuilder interface {
 // will still keep this interface for testing purposes.
 type APIClient interface {
 	// AddWatch adds a watch for an xDS resource given its type and name.
-	AddWatch(ResourceType, string)
+	AddWatch(xdsresource.ResourceType, string)
 
 	// RemoveWatch cancels an already registered watch for an xDS resource
 	// given its type and name.
-	RemoveWatch(ResourceType, string)
+	RemoveWatch(xdsresource.ResourceType, string)
 
 	// reportLoad starts an LRS stream to periodically report load using the
 	// provided ClientConn, which represent a connection to the management
@@ -159,35 +159,13 @@ var newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, op
 // style of ccBalancerWrapper so that the Client type does not implement these
 // exported methods.
 type clientImpl struct {
-	done               *grpcsync.Event
-	config             *bootstrap.Config
-	cc                 *grpc.ClientConn // Connection to the management server.
-	apiClient          APIClient
-	watchExpiryTimeout time.Duration
+	done      *grpcsync.Event
+	config    *bootstrap.Config
+	cc        *grpc.ClientConn // Connection to the management server.
+	apiClient APIClient
 
 	logger *grpclog.PrefixLogger
-
-	updateCh *buffer.Unbounded // chan *watcherInfoWithUpdate
-	// All the following maps are to keep the updates/metadata in a cache.
-	// TODO: move them to a separate struct/package, to cleanup the xds_client.
-	// And CSDS handler can be implemented directly by the cache.
-	mu          sync.Mutex
-	ldsWatchers map[string]map[*watchInfo]bool
-	ldsVersion  string // Only used in CSDS.
-	ldsCache    map[string]xdsresource.ListenerUpdate
-	ldsMD       map[string]xdsresource.UpdateMetadata
-	rdsWatchers map[string]map[*watchInfo]bool
-	rdsVersion  string // Only used in CSDS.
-	rdsCache    map[string]xdsresource.RouteConfigUpdate
-	rdsMD       map[string]xdsresource.UpdateMetadata
-	cdsWatchers map[string]map[*watchInfo]bool
-	cdsVersion  string // Only used in CSDS.
-	cdsCache    map[string]xdsresource.ClusterUpdate
-	cdsMD       map[string]xdsresource.UpdateMetadata
-	edsWatchers map[string]map[*watchInfo]bool
-	edsVersion  string // Only used in CSDS.
-	edsCache    map[string]xdsresource.EndpointsUpdate
-	edsMD       map[string]xdsresource.UpdateMetadata
+	pubsub *pubsub.Pubsub
 
 	// Changes to map lrsClients and the lrsClient inside the map need to be
 	// protected by lrsMu.
@@ -196,7 +174,7 @@ type clientImpl struct {
 }
 
 // newWithConfig returns a new xdsClient with the given config.
-func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*clientImpl, error) {
+func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (_ *clientImpl, retErr error) {
 	switch {
 	case config.BalancerName == "":
 		return nil, errors.New("xds: no xds_server name provided in options")
@@ -226,25 +204,24 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 	}
 
 	c := &clientImpl{
-		done:               grpcsync.NewEvent(),
-		config:             config,
-		watchExpiryTimeout: watchExpiryTimeout,
-
-		updateCh:    buffer.NewUnbounded(),
-		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]xdsresource.ListenerUpdate),
-		ldsMD:       make(map[string]xdsresource.UpdateMetadata),
-		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]xdsresource.RouteConfigUpdate),
-		rdsMD:       make(map[string]xdsresource.UpdateMetadata),
-		cdsWatchers: make(map[string]map[*watchInfo]bool),
-		cdsCache:    make(map[string]xdsresource.ClusterUpdate),
-		cdsMD:       make(map[string]xdsresource.UpdateMetadata),
-		edsWatchers: make(map[string]map[*watchInfo]bool),
-		edsCache:    make(map[string]xdsresource.EndpointsUpdate),
-		edsMD:       make(map[string]xdsresource.UpdateMetadata),
-		lrsClients:  make(map[string]*lrsClient),
+		done:       grpcsync.NewEvent(),
+		config:     config,
+		lrsClients: make(map[string]*lrsClient),
 	}
+
+	defer func() {
+		if retErr != nil {
+			if c.cc != nil {
+				c.cc.Close()
+			}
+			if c.pubsub != nil {
+				c.pubsub.Close()
+			}
+			if c.apiClient != nil {
+				c.apiClient.Close()
+			}
+		}
+	}()
 
 	cc, err := grpc.Dial(config.BalancerName, dopts...)
 	if err != nil {
@@ -252,8 +229,10 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", config.BalancerName, err)
 	}
 	c.cc = cc
-	c.logger = prefixLogger((c))
+	c.logger = prefixLogger(c)
 	c.logger.Infof("Created ClientConn to xDS management server: %s", config.BalancerName)
+
+	c.pubsub = pubsub.New(watchExpiryTimeout, c.logger)
 
 	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
 		Parent:    c,
@@ -267,7 +246,6 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 	}
 	c.apiClient = apiClient
 	c.logger.Infof("Created")
-	go c.run()
 	return c, nil
 }
 
@@ -275,27 +253,6 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 // Callers must treat the return value as read-only.
 func (c *clientRefCounted) BootstrapConfig() *bootstrap.Config {
 	return c.config
-}
-
-// run is a goroutine for all the callbacks.
-//
-// Callback can be called in watch(), if an item is found in cache. Without this
-// goroutine, the callback will be called inline, which might cause a deadlock
-// in user's code. Callbacks also cannot be simple `go callback()` because the
-// order matters.
-func (c *clientImpl) run() {
-	for {
-		select {
-		case t := <-c.updateCh.Get():
-			c.updateCh.Load()
-			if c.done.HasFired() {
-				return
-			}
-			c.callCallback(t.(*watcherInfoWithUpdate))
-		case <-c.done.Done():
-			return
-		}
-	}
 }
 
 // Close closes the gRPC connection to the management server.
@@ -308,6 +265,7 @@ func (c *clientImpl) Close() {
 	// the client is closed?
 	c.apiClient.Close()
 	c.cc.Close()
+	c.pubsub.Close()
 	c.logger.Infof("Shutdown")
 }
 
@@ -351,36 +309,4 @@ func (c *clientImpl) updateValidator(u interface{}) error {
 		// functions.
 	}
 	return nil
-}
-
-// ResourceType identifies resources in a transport protocol agnostic way. These
-// will be used in transport version agnostic code, while the versioned API
-// clients will map these to appropriate version URLs.
-type ResourceType int
-
-// Version agnostic resource type constants.
-const (
-	UnknownResource ResourceType = iota
-	ListenerResource
-	HTTPConnManagerResource
-	RouteConfigResource
-	ClusterResource
-	EndpointsResource
-)
-
-func (r ResourceType) String() string {
-	switch r {
-	case ListenerResource:
-		return "ListenerResource"
-	case HTTPConnManagerResource:
-		return "HTTPConnManagerResource"
-	case RouteConfigResource:
-		return "RouteConfigResource"
-	case ClusterResource:
-		return "ClusterResource"
-	case EndpointsResource:
-		return "EndpointsResource"
-	default:
-		return "UnknownResource"
-	}
 }
