@@ -431,11 +431,11 @@ func (b *cdsBalancer) run() {
 func (b *cdsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 	// This is not necessary today, because xds client never sends connection
 	// errors.
-	if fromParent && xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
+	if fromParent && resource.ErrType(err) == resource.ErrorTypeResourceNotFound {
 		b.clusterHandler.close()
 	}
 	if b.childLB != nil {
-		if xdsclient.ErrType(err) != xdsclient.ErrorTypeConnection {
+		if resource.ErrType(err) != resource.ErrorTypeConnection {
 			// Connection errors will be sent to the child balancers directly.
 			// There's no need to forward them.
 			b.childLB.ResolverError(err)

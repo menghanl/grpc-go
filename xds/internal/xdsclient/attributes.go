@@ -38,10 +38,10 @@ type XDSClient interface {
 	WatchEndpoints(clusterName string, edsCb func(resource.EndpointsUpdate, error)) (cancel func())
 	ReportLoad(server string) (*load.Store, func())
 
-	DumpLDS() (string, map[string]UpdateWithMD)
-	DumpRDS() (string, map[string]UpdateWithMD)
-	DumpCDS() (string, map[string]UpdateWithMD)
-	DumpEDS() (string, map[string]UpdateWithMD)
+	DumpLDS() (string, map[string]resource.UpdateWithMD)
+	DumpRDS() (string, map[string]resource.UpdateWithMD)
+	DumpCDS() (string, map[string]resource.UpdateWithMD)
+	DumpEDS() (string, map[string]resource.UpdateWithMD)
 
 	BootstrapConfig() *bootstrap.Config
 	Close()

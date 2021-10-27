@@ -87,15 +87,15 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpLDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpLDS, "", map[string]resource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	wantRequested := make(map[string]xdsclient.UpdateWithMD)
+	wantRequested := make(map[string]resource.UpdateWithMD)
 	for _, n := range ldsTargets {
 		cancel := client.WatchListener(n, func(update resource.ListenerUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
+		wantRequested[n] = resource.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpLDS, "", wantRequested); err != nil {
@@ -103,10 +103,10 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	}
 
 	update0 := make(map[string]resource.ListenerUpdateErrTuple)
-	want0 := make(map[string]xdsclient.UpdateWithMD)
+	want0 := make(map[string]resource.UpdateWithMD)
 	for n, r := range listenerRaws {
 		update0[n] = resource.ListenerUpdateErrTuple{Update: resource.ListenerUpdate{Raw: r}}
-		want0[n] = xdsclient.UpdateWithMD{
+		want0[n] = resource.UpdateWithMD{
 			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
@@ -135,10 +135,10 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]xdsclient.UpdateWithMD)
+	wantDump := make(map[string]resource.UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[ldsTargets[0]] = xdsclient.UpdateWithMD{
+	wantDump[ldsTargets[0]] = resource.UpdateWithMD{
 		MD: resource.UpdateMetadata{
 			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
@@ -150,7 +150,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		Raw: listenerRaws[ldsTargets[0]],
 	}
 
-	wantDump[ldsTargets[1]] = xdsclient.UpdateWithMD{
+	wantDump[ldsTargets[1]] = resource.UpdateWithMD{
 		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: listenerRaws[ldsTargets[1]],
 	}
@@ -201,15 +201,15 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpRDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpRDS, "", map[string]resource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	wantRequested := make(map[string]xdsclient.UpdateWithMD)
+	wantRequested := make(map[string]resource.UpdateWithMD)
 	for _, n := range rdsTargets {
 		cancel := client.WatchRouteConfig(n, func(update resource.RouteConfigUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
+		wantRequested[n] = resource.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpRDS, "", wantRequested); err != nil {
@@ -217,10 +217,10 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	}
 
 	update0 := make(map[string]resource.RouteConfigUpdateErrTuple)
-	want0 := make(map[string]xdsclient.UpdateWithMD)
+	want0 := make(map[string]resource.UpdateWithMD)
 	for n, r := range routeRaws {
 		update0[n] = resource.RouteConfigUpdateErrTuple{Update: resource.RouteConfigUpdate{Raw: r}}
-		want0[n] = xdsclient.UpdateWithMD{
+		want0[n] = resource.UpdateWithMD{
 			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
@@ -249,10 +249,10 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]xdsclient.UpdateWithMD)
+	wantDump := make(map[string]resource.UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[rdsTargets[0]] = xdsclient.UpdateWithMD{
+	wantDump[rdsTargets[0]] = resource.UpdateWithMD{
 		MD: resource.UpdateMetadata{
 			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
@@ -263,7 +263,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		},
 		Raw: routeRaws[rdsTargets[0]],
 	}
-	wantDump[rdsTargets[1]] = xdsclient.UpdateWithMD{
+	wantDump[rdsTargets[1]] = resource.UpdateWithMD{
 		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: routeRaws[rdsTargets[1]],
 	}
@@ -315,15 +315,15 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpCDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpCDS, "", map[string]resource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	wantRequested := make(map[string]xdsclient.UpdateWithMD)
+	wantRequested := make(map[string]resource.UpdateWithMD)
 	for _, n := range cdsTargets {
 		cancel := client.WatchCluster(n, func(update resource.ClusterUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
+		wantRequested[n] = resource.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpCDS, "", wantRequested); err != nil {
@@ -331,10 +331,10 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	}
 
 	update0 := make(map[string]resource.ClusterUpdateErrTuple)
-	want0 := make(map[string]xdsclient.UpdateWithMD)
+	want0 := make(map[string]resource.UpdateWithMD)
 	for n, r := range clusterRaws {
 		update0[n] = resource.ClusterUpdateErrTuple{Update: resource.ClusterUpdate{Raw: r}}
-		want0[n] = xdsclient.UpdateWithMD{
+		want0[n] = resource.UpdateWithMD{
 			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
@@ -363,10 +363,10 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]xdsclient.UpdateWithMD)
+	wantDump := make(map[string]resource.UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[cdsTargets[0]] = xdsclient.UpdateWithMD{
+	wantDump[cdsTargets[0]] = resource.UpdateWithMD{
 		MD: resource.UpdateMetadata{
 			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
@@ -377,7 +377,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		},
 		Raw: clusterRaws[cdsTargets[0]],
 	}
-	wantDump[cdsTargets[1]] = xdsclient.UpdateWithMD{
+	wantDump[cdsTargets[1]] = resource.UpdateWithMD{
 		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: clusterRaws[cdsTargets[1]],
 	}
@@ -415,15 +415,15 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpEDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpEDS, "", map[string]resource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	wantRequested := make(map[string]xdsclient.UpdateWithMD)
+	wantRequested := make(map[string]resource.UpdateWithMD)
 	for _, n := range edsTargets {
 		cancel := client.WatchEndpoints(n, func(update resource.EndpointsUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
+		wantRequested[n] = resource.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpEDS, "", wantRequested); err != nil {
@@ -431,10 +431,10 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	}
 
 	update0 := make(map[string]resource.EndpointsUpdateErrTuple)
-	want0 := make(map[string]xdsclient.UpdateWithMD)
+	want0 := make(map[string]resource.UpdateWithMD)
 	for n, r := range endpointRaws {
 		update0[n] = resource.EndpointsUpdateErrTuple{Update: resource.EndpointsUpdate{Raw: r}}
-		want0[n] = xdsclient.UpdateWithMD{
+		want0[n] = resource.UpdateWithMD{
 			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
@@ -463,10 +463,10 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	)
 
 	// Expect NACK for [0], but old ACK for [1].
-	wantDump := make(map[string]xdsclient.UpdateWithMD)
+	wantDump := make(map[string]resource.UpdateWithMD)
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
-	wantDump[edsTargets[0]] = xdsclient.UpdateWithMD{
+	wantDump[edsTargets[0]] = resource.UpdateWithMD{
 		MD: resource.UpdateMetadata{
 			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
@@ -477,7 +477,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		},
 		Raw: endpointRaws[edsTargets[0]],
 	}
-	wantDump[edsTargets[1]] = xdsclient.UpdateWithMD{
+	wantDump[edsTargets[1]] = resource.UpdateWithMD{
 		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: endpointRaws[edsTargets[1]],
 	}
@@ -486,7 +486,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	}
 }
 
-func compareDump(dumpFunc func() (string, map[string]xdsclient.UpdateWithMD), wantVersion string, wantDump interface{}) error {
+func compareDump(dumpFunc func() (string, map[string]resource.UpdateWithMD), wantVersion string, wantDump interface{}) error {
 	v, dump := dumpFunc()
 	if v != wantVersion {
 		return fmt.Errorf("Dump() returned version %q, want %q", v, wantVersion)

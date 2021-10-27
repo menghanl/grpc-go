@@ -570,7 +570,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 	}
 
 	// Delete the resource
-	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	suErr := resource.NewErrorf(resource.ErrorTypeResourceNotFound, "resource removed error")
 	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
 
 	if _, err = tcc.stateCh.Receive(ctx); err != nil {
@@ -649,7 +649,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 
 	// Delete the resource.  The channel should receive a service config with the
 	// original cluster but with an erroring config selector.
-	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	suErr := resource.NewErrorf(resource.ErrorTypeResourceNotFound, "resource removed error")
 	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
 
 	if gotState, err = tcc.stateCh.Receive(ctx); err != nil {
@@ -1064,7 +1064,7 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
-	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
+	suErr := resource.NewErrorf(resource.ErrorTypeResourceNotFound, "resource removed error")
 	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != context.DeadlineExceeded {
