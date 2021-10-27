@@ -79,8 +79,8 @@ func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstra
 
 type testAPIClient struct {
 	done          *grpcsync.Event
-	addWatches    map[ResourceType]*testutils.Channel
-	removeWatches map[ResourceType]*testutils.Channel
+	addWatches    map[xdsresource.ResourceType]*testutils.Channel
+	removeWatches map[xdsresource.ResourceType]*testutils.Channel
 }
 
 func overrideNewAPIClient() (*testutils.Channel, func()) {
@@ -95,17 +95,17 @@ func overrideNewAPIClient() (*testutils.Channel, func()) {
 }
 
 func newTestAPIClient() *testAPIClient {
-	addWatches := map[ResourceType]*testutils.Channel{
-		ListenerResource:    testutils.NewChannel(),
-		RouteConfigResource: testutils.NewChannel(),
-		ClusterResource:     testutils.NewChannel(),
-		EndpointsResource:   testutils.NewChannel(),
+	addWatches := map[xdsresource.ResourceType]*testutils.Channel{
+		xdsresource.ListenerResource:    testutils.NewChannel(),
+		xdsresource.RouteConfigResource: testutils.NewChannel(),
+		xdsresource.ClusterResource:     testutils.NewChannel(),
+		xdsresource.EndpointsResource:   testutils.NewChannel(),
 	}
-	removeWatches := map[ResourceType]*testutils.Channel{
-		ListenerResource:    testutils.NewChannel(),
-		RouteConfigResource: testutils.NewChannel(),
-		ClusterResource:     testutils.NewChannel(),
-		EndpointsResource:   testutils.NewChannel(),
+	removeWatches := map[xdsresource.ResourceType]*testutils.Channel{
+		xdsresource.ListenerResource:    testutils.NewChannel(),
+		xdsresource.RouteConfigResource: testutils.NewChannel(),
+		xdsresource.ClusterResource:     testutils.NewChannel(),
+		xdsresource.EndpointsResource:   testutils.NewChannel(),
 	}
 	return &testAPIClient{
 		done:          grpcsync.NewEvent(),
@@ -114,11 +114,11 @@ func newTestAPIClient() *testAPIClient {
 	}
 }
 
-func (c *testAPIClient) AddWatch(resourceType ResourceType, resourceName string) {
+func (c *testAPIClient) AddWatch(resourceType xdsresource.ResourceType, resourceName string) {
 	c.addWatches[resourceType].Send(resourceName)
 }
 
-func (c *testAPIClient) RemoveWatch(resourceType ResourceType, resourceName string) {
+func (c *testAPIClient) RemoveWatch(resourceType xdsresource.ResourceType, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
@@ -156,12 +156,12 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		// Calls another watch inline, to ensure there's deadlock.
 		client.WatchCluster("another-random-name", func(xdsresource.ClusterUpdate, error) {})
 
-		if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); firstTime && err != nil {
+		if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 

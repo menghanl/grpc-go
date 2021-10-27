@@ -279,7 +279,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 		t.Fatalf("EDS impl got unexpected update: %v", err)
 	}
 
-	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
+	connectionErr := xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "connection error")
 	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, connectionErr)
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -297,7 +297,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 		t.Fatalf("want resolver error, got %v", err)
 	}
 
-	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
+	resourceErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
 	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, resourceErr)
 	// Even if error is resource not found, watch shouldn't be canceled, because
 	// this is an EDS resource removed (and xds client actually never sends this
@@ -368,7 +368,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 		t.Fatalf("EDS impl got unexpected update: %v", err)
 	}
 
-	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
+	connectionErr := xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "connection error")
 	edsB.ResolverError(connectionErr)
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -386,7 +386,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 		t.Fatalf("want resolver error, got %v", err)
 	}
 
-	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
+	resourceErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
 	edsB.ResolverError(resourceErr)
 	if _, err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
