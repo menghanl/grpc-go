@@ -65,6 +65,7 @@ type Pubsub struct {
 	edsMD       map[string]resource.UpdateMetadata
 }
 
+// New creates a new Pubsub.
 func New(watchExpiryTimeout time.Duration, logger *grpclog.PrefixLogger) *Pubsub {
 	pb := &Pubsub{
 		done:               grpcsync.NewEvent(),
@@ -89,11 +90,7 @@ func New(watchExpiryTimeout time.Duration, logger *grpclog.PrefixLogger) *Pubsub
 	return pb
 }
 
-// WatchListener uses LDS to discover information about the provided listener.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
+// WatchListener registers a watcher for the LDS resource.
 func (pb *Pubsub) WatchListener(serviceName string, cb func(resource.ListenerUpdate, error)) (first bool, cancel func() bool) {
 	wi := &watchInfo{
 		c:           pb,
@@ -108,11 +105,7 @@ func (pb *Pubsub) WatchListener(serviceName string, cb func(resource.ListenerUpd
 	return pb.watch(wi)
 }
 
-// WatchRouteConfig starts a listener watcher for the service..
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
+// WatchRouteConfig register a watcher for the RDS resource.
 func (pb *Pubsub) WatchRouteConfig(routeName string, cb func(resource.RouteConfigUpdate, error)) (first bool, cancel func() bool) {
 	wi := &watchInfo{
 		c:           pb,
@@ -127,15 +120,7 @@ func (pb *Pubsub) WatchRouteConfig(routeName string, cb func(resource.RouteConfi
 	return pb.watch(wi)
 }
 
-// WatchCluster uses CDS to discover information about the provided
-// clusterName.
-//
-// WatchCluster can be called multiple times, with same or different
-// clusterNames. Each call will start an independent watcher for the resource.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
+// WatchCluster register a watcher for the CDS resource.
 func (pb *Pubsub) WatchCluster(clusterName string, cb func(resource.ClusterUpdate, error)) (first bool, cancel func() bool) {
 	wi := &watchInfo{
 		c:           pb,
@@ -150,14 +135,7 @@ func (pb *Pubsub) WatchCluster(clusterName string, cb func(resource.ClusterUpdat
 	return pb.watch(wi)
 }
 
-// WatchEndpoints uses EDS to discover endpoints in the provided clusterName.
-//
-// WatchEndpoints can be called multiple times, with same or different
-// clusterNames. Each call will start an independent watcher for the resource.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
+// WatchEndpoints registers a watcher for the EDS resource.
 func (pb *Pubsub) WatchEndpoints(clusterName string, cb func(resource.EndpointsUpdate, error)) (first bool, cancel func() bool) {
 	wi := &watchInfo{
 		c:           pb,

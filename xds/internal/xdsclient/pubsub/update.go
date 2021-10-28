@@ -74,11 +74,7 @@ func (pb *Pubsub) callCallback(wiu *watcherInfoWithUpdate) {
 	}
 }
 
-// NewListeners is called by the underlying xdsAPIClient when it receives an
-// xDS response.
-//
-// A response can contain multiple resources. They will be parsed and put in a
-// map from resource name to the resource content.
+// NewListeners is called when there's a new LDS update.
 func (pb *Pubsub) NewListeners(updates map[string]resource.ListenerUpdateErrTuple, metadata resource.UpdateMetadata) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
@@ -143,11 +139,7 @@ func (pb *Pubsub) NewListeners(updates map[string]resource.ListenerUpdateErrTupl
 	// last watch is canceled.
 }
 
-// NewRouteConfigs is called by the underlying xdsAPIClient when it receives an
-// xDS response.
-//
-// A response can contain multiple resources. They will be parsed and put in a
-// map from resource name to the resource content.
+// NewRouteConfigs is called when there's a new RDS update.
 func (pb *Pubsub) NewRouteConfigs(updates map[string]resource.RouteConfigUpdateErrTuple, metadata resource.UpdateMetadata) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
@@ -196,11 +188,7 @@ func (pb *Pubsub) NewRouteConfigs(updates map[string]resource.RouteConfigUpdateE
 	}
 }
 
-// NewClusters is called by the underlying xdsAPIClient when it receives an xDS
-// response.
-//
-// A response can contain multiple resources. They will be parsed and put in a
-// map from resource name to the resource content.
+// NewClusters is called when there's a new CDS update.
 func (pb *Pubsub) NewClusters(updates map[string]resource.ClusterUpdateErrTuple, metadata resource.UpdateMetadata) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
@@ -267,11 +255,7 @@ func (pb *Pubsub) NewClusters(updates map[string]resource.ClusterUpdateErrTuple,
 	// last watch is canceled.
 }
 
-// NewEndpoints is called by the underlying xdsAPIClient when it receives an
-// xDS response.
-//
-// A response can contain multiple resources. They will be parsed and put in a
-// map from resource name to the resource content.
+// NewEndpoints is called when there's anew EDS update.
 func (pb *Pubsub) NewEndpoints(updates map[string]resource.EndpointsUpdateErrTuple, metadata resource.UpdateMetadata) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
