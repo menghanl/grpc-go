@@ -30,6 +30,7 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -84,7 +85,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(xdsclient.UpdateHandler)
+	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpLDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -198,7 +199,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(xdsclient.UpdateHandler)
+	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpRDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -312,7 +313,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(xdsclient.UpdateHandler)
+	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpCDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -412,7 +413,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(xdsclient.UpdateHandler)
+	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpEDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
