@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package v2
+package controller
 
 import (
 	"context"
@@ -36,7 +35,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -288,7 +287,7 @@ var (
 )
 
 type watchHandleTestcase struct {
-	rType        resource.ResourceType
+	rType        resource.Type
 	resourceName string
 
 	responseToHandle *xdspb.DiscoveryResponse
@@ -299,7 +298,7 @@ type watchHandleTestcase struct {
 }
 
 type testUpdateReceiver struct {
-	f func(rType resource.ResourceType, d map[string]interface{}, md resource.UpdateMetadata)
+	f func(rType resource.Type, d map[string]interface{}, md resource.UpdateMetadata)
 }
 
 func (t *testUpdateReceiver) NewListeners(d map[string]resource.ListenerUpdateErrTuple, metadata resource.UpdateMetadata) {
@@ -336,7 +335,7 @@ func (t *testUpdateReceiver) NewEndpoints(d map[string]resource.EndpointsUpdateE
 
 func (t *testUpdateReceiver) NewConnectionError(error) {}
 
-func (t *testUpdateReceiver) newUpdate(rType resource.ResourceType, d map[string]interface{}, metadata resource.UpdateMetadata) {
+func (t *testUpdateReceiver) newUpdate(rType resource.Type, d map[string]interface{}, metadata resource.UpdateMetadata) {
 	t.f(rType, d, metadata)
 }
 
@@ -359,8 +358,8 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	}
 	gotUpdateCh := testutils.NewChannel()
 
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType resource.ResourceType, d map[string]interface{}, md resource.UpdateMetadata) {
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(rType resource.Type, d map[string]interface{}, md resource.UpdateMetadata) {
 			if rType == test.rType {
 				switch test.rType {
 				case resource.ListenerResource:
@@ -415,15 +414,19 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// Also note that this won't trigger ACK, so there's no need to clear the
 	// request channel afterwards.
 	var handleXDSResp func(response *xdspb.DiscoveryResponse) error
-	switch test.rType {
-	case resource.ListenerResource:
-		handleXDSResp = v2c.handleLDSResponse
-	case resource.RouteConfigResource:
-		handleXDSResp = v2c.handleRDSResponse
-	case resource.ClusterResource:
-		handleXDSResp = v2c.handleCDSResponse
-	case resource.EndpointsResource:
-		handleXDSResp = v2c.handleEDSResponse
+	// switch test.rType {
+	// case resource.ListenerResource:
+	// 	handleXDSResp = v2c.handleLDSResponse
+	// case resource.RouteConfigResource:
+	// 	handleXDSResp = v2c.handleRDSResponse
+	// case resource.ClusterResource:
+	// 	handleXDSResp = v2c.handleCDSResponse
+	// case resource.EndpointsResource:
+	// 	handleXDSResp = v2c.handleEDSResponse
+	// }
+	handleXDSResp = func(response *xdspb.DiscoveryResponse) error {
+		_, _, _, err := v2c.vClient.HandleResponse(response)
+		return err
 	}
 	if err := handleXDSResp(test.responseToHandle); (err != nil) != test.wantHandleErr {
 		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantHandleErr)
@@ -464,6 +467,8 @@ func startServerAndGetCC(t *testing.T) (*fakeserver.Server, *grpc.ClientConn, fu
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
 
+	// FIXME: XDSClientConn is only called once here. Get rid of `var grpcDial`,
+	//  and this method.
 	cc, ccCleanup, err := fs.XDSClientConn()
 	if err != nil {
 		sCleanup()
@@ -475,17 +480,24 @@ func startServerAndGetCC(t *testing.T) (*fakeserver.Server, *grpc.ClientConn, fu
 	}
 }
 
-func newV2Client(p xdsclient.UpdateHandler, cc *grpc.ClientConn, n *basepb.Node, b func(int) time.Duration, l *grpclog.PrefixLogger) (*client, error) {
-	c, err := newClient(cc, xdsclient.BuildOptions{
-		Parent:    p,
-		NodeProto: n,
-		Backoff:   b,
-		Logger:    l,
-	})
+func newTestController(p UpdateHandler, cc *grpc.ClientConn, n *basepb.Node, b func(int) time.Duration, l *grpclog.PrefixLogger) (*Controller, error) {
+	// FIXME: this is definitely wrong, but should work for the tests.
+	grpcDial = func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		return cc, nil
+	}
+	c, err := New(&bootstrap.Config{
+		BalancerName: "not empty",
+		Creds:        grpc.WithInsecure(),
+		TransportAPI: version.TransportV2,
+		NodeProto:    n,
+	}, p, nil, l)
 	if err != nil {
 		return nil, err
 	}
-	return c.(*client), nil
+
+	c.backoff = b // FIXME: is this OK? might be OK.
+
+	return c, nil
 }
 
 // TestV2ClientBackoffAfterRecvError verifies if the v2Client backs off when it
@@ -503,8 +515,8 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	}
 
 	callbackCh := make(chan struct{})
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(resource.ResourceType, map[string]interface{}, resource.UpdateMetadata) { close(callbackCh) },
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(resource.Type, map[string]interface{}, resource.UpdateMetadata) { close(callbackCh) },
 	}, cc, goodNodeProto, clientBackoff, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -548,8 +560,8 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	defer cleanup()
 
 	callbackCh := testutils.NewChannel()
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType resource.ResourceType, d map[string]interface{}, md resource.UpdateMetadata) {
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(rType resource.Type, d map[string]interface{}, md resource.UpdateMetadata) {
 			if rType == resource.ListenerResource {
 				if u, ok := d[goodLDSTarget1]; ok {
 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
@@ -620,8 +632,8 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	defer cc.Close()
 
 	callbackCh := testutils.NewChannel()
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType resource.ResourceType, d map[string]interface{}, md resource.UpdateMetadata) {
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(rType resource.Type, d map[string]interface{}, md resource.UpdateMetadata) {
 			if rType == resource.ListenerResource {
 				if u, ok := d[goodLDSTarget1]; ok {
 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)

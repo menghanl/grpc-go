@@ -29,11 +29,11 @@ import (
 func (c *clientImpl) WatchListener(serviceName string, cb func(resource.ListenerUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchListener(serviceName, cb)
 	if first {
-		c.apiClient.AddWatch(resource.ListenerResource, serviceName)
+		c.controller.AddWatch(resource.ListenerResource, serviceName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(resource.ListenerResource, serviceName)
+			c.controller.RemoveWatch(resource.ListenerResource, serviceName)
 		}
 	}
 }
@@ -46,11 +46,11 @@ func (c *clientImpl) WatchListener(serviceName string, cb func(resource.Listener
 func (c *clientImpl) WatchRouteConfig(routeName string, cb func(resource.RouteConfigUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchRouteConfig(routeName, cb)
 	if first {
-		c.apiClient.AddWatch(resource.RouteConfigResource, routeName)
+		c.controller.AddWatch(resource.RouteConfigResource, routeName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(resource.RouteConfigResource, routeName)
+			c.controller.RemoveWatch(resource.RouteConfigResource, routeName)
 		}
 	}
 }
@@ -67,11 +67,11 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(resource.RouteCo
 func (c *clientImpl) WatchCluster(clusterName string, cb func(resource.ClusterUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchCluster(clusterName, cb)
 	if first {
-		c.apiClient.AddWatch(resource.ClusterResource, clusterName)
+		c.controller.AddWatch(resource.ClusterResource, clusterName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(resource.ClusterResource, clusterName)
+			c.controller.RemoveWatch(resource.ClusterResource, clusterName)
 		}
 	}
 }
@@ -87,11 +87,11 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(resource.ClusterUp
 func (c *clientImpl) WatchEndpoints(clusterName string, cb func(resource.EndpointsUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchEndpoints(clusterName, cb)
 	if first {
-		c.apiClient.AddWatch(resource.EndpointsResource, clusterName)
+		c.controller.AddWatch(resource.EndpointsResource, clusterName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(resource.EndpointsResource, clusterName)
+			c.controller.RemoveWatch(resource.EndpointsResource, clusterName)
 		}
 	}
 }

@@ -53,7 +53,8 @@ func rawFromCache(s string, cache interface{}) *anypb.Any {
 	}
 }
 
-func (pb *Pubsub) Dump(t resource.ResourceType) (string, map[string]resource.UpdateWithMD) {
+// Dump dumps the cache.
+func (pb *Pubsub) Dump(t resource.Type) (string, map[string]resource.UpdateWithMD) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 

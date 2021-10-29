@@ -38,7 +38,7 @@ const (
 // watchInfo holds all the information from a watch() call.
 type watchInfo struct {
 	c      *Pubsub
-	rType  resource.ResourceType
+	rType  resource.Type
 	target string
 
 	ldsCallback func(resource.ListenerUpdate, error)

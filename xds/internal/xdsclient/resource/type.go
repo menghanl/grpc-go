@@ -20,8 +20,8 @@ package resource
 import (
 	"time"
 
-	"github.com/golang/protobuf/ptypes/any"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // UpdateValidatorFunc performs validations on update structs using
@@ -114,17 +114,17 @@ type UpdateErrorMetadata struct {
 // resolvers/balancers).
 type UpdateWithMD struct {
 	MD  UpdateMetadata
-	Raw *any.Any
+	Raw *anypb.Any
 }
 
-// ResourceType identifies resources in a transport protocol agnostic way. These
+// Type identifies resources in a transport protocol agnostic way. These
 // will be used in transport version agnostic code, while the versioned API
 // clients will map these to appropriate version URLs.
-type ResourceType int
+type Type int
 
 // Version agnostic resource type constants.
 const (
-	UnknownResource ResourceType = iota
+	UnknownResource Type = iota
 	ListenerResource
 	HTTPConnManagerResource
 	RouteConfigResource
@@ -132,7 +132,7 @@ const (
 	EndpointsResource
 )
 
-func (r ResourceType) String() string {
+func (r Type) String() string {
 	switch r {
 	case ListenerResource:
 		return "ListenerResource"

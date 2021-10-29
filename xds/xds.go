@@ -42,8 +42,8 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"         // Register the RBAC filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"       // Register the router filter.
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"      // Register the xds_resolver.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2"            // Register the v2 xDS API client.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v3"            // Register the v3 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/v2" // Register the v2 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/v3" // Register the v3 xDS API client.
 )
 
 func init() {

@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package v2
+package controller
 
 import (
 	"testing"
@@ -180,19 +179,19 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	_, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(resource.ResourceType, map[string]interface{}, resource.UpdateMetadata) {},
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(resource.Type, map[string]interface{}, resource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer v2c.Close()
 
-	if v2c.handleLDSResponse(badResourceTypeInLDSResponse) == nil {
+	if _, _, _, err := v2c.vClient.HandleResponse(badResourceTypeInLDSResponse); err == nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
 
-	if v2c.handleLDSResponse(goodLDSResponse1) != nil {
+	if _, _, _, err := v2c.vClient.HandleResponse(goodLDSResponse1); err != nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
 }

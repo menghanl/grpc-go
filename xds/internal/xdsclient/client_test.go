@@ -26,6 +26,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -35,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 )
@@ -79,29 +81,30 @@ func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstra
 
 type testAPIClient struct {
 	done          *grpcsync.Event
-	addWatches    map[resource.ResourceType]*testutils.Channel
-	removeWatches map[resource.ResourceType]*testutils.Channel
+	addWatches    map[resource.Type]*testutils.Channel
+	removeWatches map[resource.Type]*testutils.Channel
 }
 
+// FIXME: rename the var/functions.
 func overrideNewAPIClient() (*testutils.Channel, func()) {
-	origNewAPIClient := newAPIClient
+	origNewController := newController
 	ch := testutils.NewChannel()
-	newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
+	newController = func(config *bootstrap.Config, pubsub *pubsub.Pubsub, validator resource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
 		ret := newTestAPIClient()
 		ch.Send(ret)
 		return ret, nil
 	}
-	return ch, func() { newAPIClient = origNewAPIClient }
+	return ch, func() { newController = origNewController }
 }
 
 func newTestAPIClient() *testAPIClient {
-	addWatches := map[resource.ResourceType]*testutils.Channel{
+	addWatches := map[resource.Type]*testutils.Channel{
 		resource.ListenerResource:    testutils.NewChannel(),
 		resource.RouteConfigResource: testutils.NewChannel(),
 		resource.ClusterResource:     testutils.NewChannel(),
 		resource.EndpointsResource:   testutils.NewChannel(),
 	}
-	removeWatches := map[resource.ResourceType]*testutils.Channel{
+	removeWatches := map[resource.Type]*testutils.Channel{
 		resource.ListenerResource:    testutils.NewChannel(),
 		resource.RouteConfigResource: testutils.NewChannel(),
 		resource.ClusterResource:     testutils.NewChannel(),
@@ -114,15 +117,16 @@ func newTestAPIClient() *testAPIClient {
 	}
 }
 
-func (c *testAPIClient) AddWatch(resourceType resource.ResourceType, resourceName string) {
+func (c *testAPIClient) AddWatch(resourceType resource.Type, resourceName string) {
 	c.addWatches[resourceType].Send(resourceName)
 }
 
-func (c *testAPIClient) RemoveWatch(resourceType resource.ResourceType, resourceName string) {
+func (c *testAPIClient) RemoveWatch(resourceType resource.Type, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
-func (c *testAPIClient) reportLoad(context.Context, *grpc.ClientConn, loadReportingOptions) {
+func (c *testAPIClient) ReportLoad(server string) (*load.Store, func()) {
+	panic("ReportLoad is not implemented")
 }
 
 func (c *testAPIClient) Close() {

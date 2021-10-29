@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register the v2 API client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/v2" // Register the v2 API client.
 )
 
 type s struct {

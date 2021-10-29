@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package v2
+package controller
 
 import (
 	"context"
@@ -41,13 +41,13 @@ const (
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
-func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
+func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *Controller, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
 	cbLDS = testutils.NewChannel()
 	cbRDS = testutils.NewChannel()
 	cbCDS = testutils.NewChannel()
 	cbEDS = testutils.NewChannel()
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType resource.ResourceType, d map[string]interface{}, md resource.UpdateMetadata) {
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(rType resource.Type, d map[string]interface{}, md resource.UpdateMetadata) {
 			t.Logf("Received %v callback with {%+v}", rType, d)
 			switch rType {
 			case resource.ListenerResource:
@@ -117,7 +117,7 @@ func sendXDSRespWithVersion(ch chan<- *fakeserver.Response, respWithoutVersion *
 
 // startXDS calls watch to send the first request. It then sends a good response
 // and checks for ack.
-func startXDS(ctx context.Context, t *testing.T, rType resource.ResourceType, v2c *client, reqChan *testutils.Channel, req *xdspb.DiscoveryRequest, preVersion string, preNonce string) {
+func startXDS(ctx context.Context, t *testing.T, rType resource.Type, v2c *Controller, reqChan *testutils.Channel, req *xdspb.DiscoveryRequest, preVersion string, preNonce string) {
 	nameToWatch := ""
 	switch rType {
 	case resource.ListenerResource:
@@ -142,7 +142,7 @@ func startXDS(ctx context.Context, t *testing.T, rType resource.ResourceType, v2
 //
 // It also waits and checks that the ack request contains the given version, and
 // the generated nonce.
-func sendGoodResp(ctx context.Context, t *testing.T, rType resource.ResourceType, fakeServer *fakeserver.Server, ver int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (string, error) {
+func sendGoodResp(ctx context.Context, t *testing.T, rType resource.Type, fakeServer *fakeserver.Server, ver int, goodResp *xdspb.DiscoveryResponse, wantReq *xdspb.DiscoveryRequest, callbackCh *testutils.Channel) (string, error) {
 	nonce := sendXDSRespWithVersion(fakeServer.XDSResponseChan, goodResp, ver)
 	t.Logf("Good %v response pushed to fakeServer...", rType)
 
@@ -162,7 +162,7 @@ func sendGoodResp(ctx context.Context, t *testing.T, rType resource.ResourceType
 // be nacked, so we expect a request with the previous version (version-1).
 //
 // But the nonce in request should be the new nonce.
-func sendBadResp(ctx context.Context, t *testing.T, rType resource.ResourceType, fakeServer *fakeserver.Server, ver int, wantReq *xdspb.DiscoveryRequest) error {
+func sendBadResp(ctx context.Context, t *testing.T, rType resource.Type, fakeServer *fakeserver.Server, ver int, wantReq *xdspb.DiscoveryRequest) error {
 	var typeURL string
 	switch rType {
 	case resource.ListenerResource:

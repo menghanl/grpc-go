@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package xdsclient_test
+package xdsclient
 
 import (
 	"context"
@@ -34,16 +33,13 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register the v2 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/v2" // Register the v2 xDS API client.
 )
 
 const (
-	defaultTestTimeout              = 5 * time.Second
-	defaultTestShortTimeout         = 10 * time.Millisecond // For events expected to *not* happen.
 	defaultClientWatchExpiryTimeout = 15 * time.Second
 )
 
@@ -54,7 +50,7 @@ func (s) TestLRSClient(t *testing.T) {
 	}
 	defer sCleanup()
 
-	xdsC, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	xdsC, err := NewWithConfigForTesting(&bootstrap.Config{
 		BalancerName: fs.Address,
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		NodeProto:    &v2corepb.Node{},

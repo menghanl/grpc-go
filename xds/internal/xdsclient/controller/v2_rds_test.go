@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package v2
+package controller
 
 import (
 	"context"
@@ -26,7 +25,6 @@ import (
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
@@ -35,7 +33,7 @@ import (
 // This is called by RDS tests to start LDS first, because LDS is a
 // pre-requirement for RDS, and RDS handle would fail without an existing LDS
 // watch.
-func doLDS(ctx context.Context, t *testing.T, v2c xdsclient.APIClient, fakeServer *fakeserver.Server) {
+func doLDS(ctx context.Context, t *testing.T, v2c *Controller, fakeServer *fakeserver.Server) {
 	v2c.AddWatch(resource.ListenerResource, goodLDSTarget1)
 	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for LDS request: %v", err)
@@ -182,8 +180,8 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	fakeServer, cc, cleanup := startServerAndGetCC(t)
 	defer cleanup()
 
-	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(resource.ResourceType, map[string]interface{}, resource.UpdateMetadata) {},
+	v2c, err := newTestController(&testUpdateReceiver{
+		f: func(resource.Type, map[string]interface{}, resource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -194,11 +192,11 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	defer cancel()
 	doLDS(ctx, t, v2c, fakeServer)
 
-	if v2c.handleRDSResponse(badResourceTypeInRDSResponse) == nil {
+	if _, _, _, err := v2c.vClient.HandleResponse(badResourceTypeInRDSResponse); err == nil {
 		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
 	}
 
-	if v2c.handleRDSResponse(goodRDSResponse1) != nil {
+	if _, _, _, err := v2c.vClient.HandleResponse(goodRDSResponse1); err != nil {
 		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
 	}
 }
