@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
-	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v1udpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
