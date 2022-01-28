@@ -3,6 +3,7 @@ module google.golang.org/grpc
 go 1.14
 
 require (
+	cloud.google.com/go v0.34.0
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4
 	github.com/cncf/xds/go v0.0.0-20211011173535-cb28da3451f1
