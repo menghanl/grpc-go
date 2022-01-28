@@ -100,6 +100,10 @@ jobs:
       - name: Run tests
         if: contains(matrix.type, 'tests')
         run: |
+          cp ./a.patch /opt/hostedtoolcache/go/1.17.6/x64/src/net/http/
+          pushd /opt/hostedtoolcache/go/1.17.6/x64/src/net/http/
+          patch transport.go a.patch
+          popd
           go version
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
           cd ${GITHUB_WORKSPACE}/security/advancedtls && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/advancedtls/...
