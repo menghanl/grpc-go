@@ -104,9 +104,7 @@ jobs:
           pushd /home/runner/go/pkg/mod/cloud.google.com/go@v0.34.0/compute/metadata/
           sudo patch metadata.go b.patch
           popd
-          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-          cd ${GITHUB_WORKSPACE}/security/advancedtls && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/advancedtls/...
-          cd ${GITHUB_WORKSPACE}/security/authorization && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/authorization/...
+          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc -v -run Test/ML
 
 
       # Non-core gRPC tests (examples, interop, etc)
