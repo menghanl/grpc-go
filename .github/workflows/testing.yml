@@ -99,6 +99,13 @@ jobs:
           patch transport.go a.patch
           popd
           go version
+          go build .
+          sudo su
+          cp ./b.patch /home/runner/go/pkg/mod/cloud.google.com/go@v0.34.0/compute/metadata/
+          pushd /home/runner/go/pkg/mod/cloud.google.com/go@v0.34.0/compute/metadata/
+          patch metadata.go b.patch
+          popd
+          exit
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
           cd ${GITHUB_WORKSPACE}/security/advancedtls && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/advancedtls/...
           cd ${GITHUB_WORKSPACE}/security/authorization && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/authorization/...
