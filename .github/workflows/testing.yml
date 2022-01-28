@@ -60,12 +60,6 @@ jobs:
             goversion: 1.17
             goarch: arm64
 
-          - type: tests
-            goversion: 1.16
-
-          - type: tests
-            goversion: 1.15
-
     steps:
       # Setup the environment.
       - name: Setup GOARCH
