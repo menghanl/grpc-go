@@ -100,10 +100,6 @@ jobs:
           popd
           go version
           go build ./...
-          sudo cp ./b.patch /home/runner/go/pkg/mod/cloud.google.com/go@v0.34.0/compute/metadata/
-          pushd /home/runner/go/pkg/mod/cloud.google.com/go@v0.34.0/compute/metadata/
-          sudo patch metadata.go b.patch
-          popd
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc -v -run Test/ML
 
 
