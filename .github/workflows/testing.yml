@@ -98,6 +98,13 @@ jobs:
           pushd /opt/hostedtoolcache/go/1.17.6/x64/src/net/http/
           patch transport.go a.patch
           popd
+
+          go build ./...
+          sudo cp ./c.patch /home/runner/go/pkg/mod/cloud.google.com/go/compute@v1.1.0/metadata
+          pushd /home/runner/go/pkg/mod/cloud.google.com/go/compute@v1.1.0/metadata
+          sudo patch metadata.go c.patch
+          popd
+
           go version
           go build ./...
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc -v -run Test/ML
