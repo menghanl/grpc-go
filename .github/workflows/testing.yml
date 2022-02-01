@@ -107,7 +107,7 @@ jobs:
 
           go version
           go build ./...
-          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc -v -run Test/ML
+          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc -v -run TestML
 
 
       # Non-core gRPC tests (examples, interop, etc)

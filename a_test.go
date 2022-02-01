@@ -21,9 +21,12 @@ import (
 	"testing"
 
 	"cloud.google.com/go/compute/metadata"
+	"google.golang.org/grpc/internal/leakcheck"
 )
 
-func (s) TestML(t *testing.T) {
+func TestML(t *testing.T) {
+	defer leakcheck.Check(t)
+
 	if metadata.OnGCE() {
 		t.Logf("on gce")
 	}
