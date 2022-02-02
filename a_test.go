@@ -25,17 +25,15 @@ import (
 
 	_ "google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/roundrobin"
+	_ "google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/internal"
 	_ "google.golang.org/grpc/internal/balancer/stub"
-	_ "google.golang.org/grpc/resolver"
-	_ "google.golang.org/grpc/resolver/manual"
-	_ "google.golang.org/grpc/serviceconfig"
-
-	_ "google.golang.org/grpc/codes"
-	_ "google.golang.org/grpc/internal/transport"
-	_ "google.golang.org/grpc/status"
-
-	_ "google.golang.org/grpc/internal/grpctest"
+	// _ "google.golang.org/grpc/internal/grpctest"
+	// _ "google.golang.org/grpc/internal/transport"
+	// _ "google.golang.org/grpc/resolver"
+	// _ "google.golang.org/grpc/resolver/manual"
+	// _ "google.golang.org/grpc/serviceconfig"
+	// _ "google.golang.org/grpc/status"
 )
 
 func TestML(t *testing.T) {
