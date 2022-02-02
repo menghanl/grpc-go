@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package grpc
+package grpc_test
 
 import (
 	"testing"
