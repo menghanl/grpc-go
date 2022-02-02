@@ -20,8 +20,27 @@ package grpc
 import (
 	"testing"
 
+	_ "context"
+	_ "fmt"
+	_ "math"
+	_ "time"
+
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/grpc/internal/leakcheck"
+
+	_ "google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/roundrobin"
+	_ "google.golang.org/grpc/internal"
+	_ "google.golang.org/grpc/internal/balancer/stub"
+	_ "google.golang.org/grpc/resolver"
+	_ "google.golang.org/grpc/resolver/manual"
+	_ "google.golang.org/grpc/serviceconfig"
+
+	_ "google.golang.org/grpc/codes"
+	_ "google.golang.org/grpc/internal/transport"
+	_ "google.golang.org/grpc/status"
+
+	_ "google.golang.org/grpc/internal/grpctest"
 )
 
 func TestML(t *testing.T) {
