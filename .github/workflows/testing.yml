@@ -49,6 +49,22 @@ jobs:
             goversion: 1.17
             testflags: -race
 
+          - type: tests-2
+            goversion: 1.17
+            testflags: -race
+
+          - type: tests-3
+            goversion: 1.17
+            testflags: -race
+
+          - type: tests-4
+            goversion: 1.17
+            testflags: -race
+
+          - type: tests-5
+            goversion: 1.17
+            testflags: -race
+
 #          - type: extras
 #            goversion: 1.17
 #
