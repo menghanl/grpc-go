@@ -20,11 +20,6 @@ package grpc
 import (
 	"testing"
 
-	_ "context"
-	_ "fmt"
-	_ "math"
-	_ "time"
-
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/grpc/internal/leakcheck"
 
