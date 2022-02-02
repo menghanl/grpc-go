@@ -1,0 +1,55 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - type: tests
+            goversion: 1.17
+
+          - type: tests-1
+            goversion: 1.17
+
+          - type: tests-2
+            goversion: 1.17
+
+          - type: tests-3
+            goversion: 1.17
+
+          - type: tests-4
+            goversion: 1.17
+
+          - type: tests-5
+            goversion: 1.17
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: ${{ matrix.goversion }}
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: |
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
+        go test . -run TestML -race -cpu 1,4 -count 1
