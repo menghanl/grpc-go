@@ -108,22 +108,17 @@ jobs:
       # Main tests run for everything except when testing "extras"
       # (where we run a reduced set of tests).
       - name: Run tests
-        if: contains(matrix.type, 'tests')
         run: |
-          cp ./a.patch /opt/hostedtoolcache/go/1.17.6/x64/src/net/http/
-          pushd /opt/hostedtoolcache/go/1.17.6/x64/src/net/http/
-          patch transport.go a.patch
-          popd
-
-          go build ./...
-          sudo cp ./c.patch /home/runner/go/pkg/mod/cloud.google.com/go/compute@v1.1.0/metadata
-          pushd /home/runner/go/pkg/mod/cloud.google.com/go/compute@v1.1.0/metadata
-          sudo patch metadata.go c.patch
-          popd
-
-          go version
-          go build ./...
-          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc -v -run TestML
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
+          go test . -run TestML -race -cpu 1,4 -count 1
 
 
       # Non-core gRPC tests (examples, interop, etc)
