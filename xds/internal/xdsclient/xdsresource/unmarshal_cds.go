@@ -174,6 +174,17 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 		ret.DNSHostName = dnsHN
 		return ret, nil
+	case cluster.GetType() == v3clusterpb.Cluster_STRICT_DNS:
+		// FIXME(fqdn): this should be different from logical DNS (use roundrobin instead of pickfirst).
+		//
+		// FIXME(fqdn): env var???
+		ret.ClusterType = ClusterTypeLogicalDNS
+		dnsHN, err := dnsHostNameFromCluster(cluster)
+		if err != nil {
+			return ClusterUpdate{}, err
+		}
+		ret.DNSHostName = dnsHN
+		return ret, nil
 	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
 		if !envconfig.XDSAggregateAndDNS {
 			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
