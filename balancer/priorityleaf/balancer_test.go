@@ -138,6 +138,53 @@ func TestPriority_AddHigherPriority(t *testing.T) {
 	}
 }
 
+// When the resolver returns 0 address as the first result, RPC should fail with that info.
+func TestPriority_NoPrioritiesInitially(t *testing.T) {
+	t.Parallel()
+
+	addr1, _, _ := createServerBehindProxy(t, "one")
+	addr2, _, _ := createServerBehindProxy(t, "two")
+
+	r := manual.NewBuilderWithScheme("whatever")
+	s := resolver.State{Endpoints: nil}
+	r.InitialState(s)
+
+	// Connect to the test backend.
+	dopts := []grpc.DialOption{
+		grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	dopts = append(dopts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{
+		"healthCheckConfig": {"serviceName": ""},
+		"loadBalancingConfig": [{"%s":{}}]}`, priorityleaf.Name)))
+	cc, err := grpc.NewClient(r.Scheme()+":///whatever", dopts...)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cc.Close()
+	})
+	greeterClient := helloworld.NewGreeterClient(cc)
+
+	for i := 0; i < 20; i++ {
+		_, err := greeterClient.SayHello(t.Context(), &helloworld.HelloRequest{Name: "world"})
+		require.Error(t, err)
+		require.ErrorContains(t, err, "all addresses are removed")
+	}
+
+	r.UpdateState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: addr1}}},
+			{Addresses: []resolver.Address{{Addr: addr2}}},
+		},
+	})
+
+	for i := 0; i < 20; i++ {
+		resp, err := greeterClient.SayHello(t.Context(), &helloworld.HelloRequest{Name: "world"})
+		require.NoError(t, err)
+		require.Equal(t, "Hello world from one", resp.GetMessage())
+	}
+}
+
+// When the lb is working but the resolver returns 0 address, RPC should keep working.
 func TestPriority_RemovesAllPriorities(t *testing.T) {
 	t.Parallel()
 	testServer := createServerBehindProxyAndDial(t, 2)
@@ -148,10 +195,80 @@ func TestPriority_RemovesAllPriorities(t *testing.T) {
 	}
 	testServer.manualResolver.UpdateState(resolver.State{Endpoints: nil})
 	for i := 0; i < 20; i++ {
-		_, err := testServer.greeterClient.SayHello(t.Context(), &helloworld.HelloRequest{Name: "world"})
-		require.Error(t, err)
-		require.ErrorContains(t, err, "all addresses are removed")
+		resp, err := testServer.greeterClient.SayHello(t.Context(), &helloworld.HelloRequest{Name: "world"})
+		require.NoError(t, err)
+		require.Equal(t, "Hello world from 0", resp.GetMessage())
 	}
+}
+
+// When a backend reports unhealthy, resolver.ResolveNow() is triggered.
+//
+// By default gRPC doesn't trigger re-resolver on health check failures. But we
+// enforce that in the lb.
+func TestPriority_TriggerResolve(t *testing.T) {
+	t.Parallel()
+
+	addr1, _, hs1 := createServerBehindProxy(t, "one")
+	addr2, _, _ := createServerBehindProxy(t, "two")
+
+	var resolveNowCount int
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.ResolveNowCallback = func(o resolver.ResolveNowOptions) {
+		resolveNowCount++
+		// When re-resolve, add the second backend.
+		r.UpdateState(resolver.State{
+			Endpoints: []resolver.Endpoint{
+				{Addresses: []resolver.Address{{Addr: addr1}}},
+				{Addresses: []resolver.Address{{Addr: addr2}}},
+			},
+		})
+	}
+	// Init with just one backend.
+	r.InitialState(resolver.State{
+		Endpoints: []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: addr1}}},
+		},
+	})
+
+	// Connect to the test backend.
+	dopts := []grpc.DialOption{
+		grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+	dopts = append(dopts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{
+		"healthCheckConfig": {"serviceName": ""},
+		"loadBalancingConfig": [{"%s":{}}]}`, priorityleaf.Name)))
+	cc, err := grpc.NewClient(r.Scheme()+":///whatever", dopts...)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cc.Close()
+	})
+	greeterClient := helloworld.NewGreeterClient(cc)
+
+	for i := 0; i < 20; i++ {
+		resp, err := greeterClient.SayHello(t.Context(), &helloworld.HelloRequest{Name: "world"})
+		require.NoError(t, err)
+		require.Equal(t, "Hello world from one", resp.GetMessage())
+	}
+
+	require.Equal(t, 0, resolveNowCount)
+
+	t.Log("set the server to not serving")
+	hs1.stateCh <- grpc_health_v1.HealthCheckResponse_NOT_SERVING
+
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		require.Equal(t, 1, resolveNowCount)
+	}, time.Second, time.Second/10, "timeout waiting for RPC to switch backend")
+
+	callBackend := func(id string) func(collect *assert.CollectT) {
+		return func(collect *assert.CollectT) {
+			resp, err := greeterClient.SayHello(t.Context(), &helloworld.HelloRequest{Name: "world"})
+			require.NoError(t, err)
+			require.Equal(t, fmt.Sprintf("Hello world from %v", id), resp.GetMessage())
+		}
+	}
+	require.EventuallyWithT(t, callBackend("two"), time.Second, time.Second/10, "timeout waiting for RPC to switch backend")
 }
 
 // When a addr is moved from low priority to high.

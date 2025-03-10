@@ -85,6 +85,9 @@ func (scw *subConnWrapper) processNewState(state balancer.SubConnState) {
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            &picker{err: state.ConnectionError},
 		}
+		// Whenever a subconn reports TransientFailure (weather it's from TCP, or
+		// from health check), we always trigger a re-resolve.
+		scw.parent.cc.ResolveNow(resolver.ResolveNowOptions{})
 		scw.parent.syncPriority(scw.addr)
 	case connectivity.Idle:
 		scw.sc.Connect()

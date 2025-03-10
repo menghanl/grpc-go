@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	// ErrAllPrioritiesRemoved is returned by the picker when there's no priority available.
 	ErrAllPrioritiesRemoved = errors.New("from priority lb, no address is provided, all addresses are removed")
+	ErrMultiAddressEndpoint = errors.New("from priority lb, endpoint with multiple addresses is not supported")
 )
 
 // syncPriority handles priority after a config update or a subconn

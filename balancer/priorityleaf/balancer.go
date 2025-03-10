@@ -53,7 +53,15 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 	var addrsPriority []resolver.Address
 	for _, e := range s.ResolverState.Endpoints {
 		if len(e.Addresses) > 1 {
-			fmt.Println("warning: more than one address in an endpoint is not supported")
+			if b.addrInUse.Equal(resolver.Address{}) {
+				fmt.Println("warning: more than one address in an endpoint is not supported and this is the first update, send an error back")
+				b.cc.UpdateState(balancer.State{
+					ConnectivityState: connectivity.TransientFailure,
+					Picker:            &picker{err: ErrMultiAddressEndpoint},
+				})
+			} else {
+				fmt.Println("warning: more than one address in an endpoint is not supported, ignoring this update and keeping the previous state")
+			}
 			return balancer.ErrBadResolverState
 		}
 		addrsPriority = append(addrsPriority, e.Addresses...)
@@ -61,7 +69,15 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 
 	// Everything was removed by the update.
 	if len(addrsPriority) == 0 {
-		fmt.Println("warning: all addresses were removed, ignoring this update and keeping the previous state")
+		if b.addrInUse.Equal(resolver.Address{}) {
+			fmt.Println("warning: all addresses were removed and this is the first update, send an error back")
+			b.cc.UpdateState(balancer.State{
+				ConnectivityState: connectivity.TransientFailure,
+				Picker:            &picker{err: ErrAllPrioritiesRemoved},
+			})
+		} else {
+			fmt.Println("warning: all addresses were removed, ignoring this update and keeping the previous state")
+		}
 		return balancer.ErrBadResolverState
 	}
 
